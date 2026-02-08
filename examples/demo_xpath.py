@@ -1,7 +1,7 @@
 # %% [markdown]
-# # 🔮 cellspell Demo
+# # 🔮 cellspell — XPath Spell Demo
 #
-# Demonstrating the XPath spell.
+# Query XML (and HTML) files using XPath expressions, powered by `xmllint`.
 #
 # ## Setup
 
@@ -10,7 +10,7 @@
 # !pip install cellspell -q              # Uncomment for Colab
 
 # %%
-%load_ext cellspell
+%load_ext cellspell.xpath
 
 # %% [markdown]
 # ## Create Sample XML Files
@@ -46,10 +46,7 @@
 </bookstore>
 
 # %% [markdown]
-# ## Load and Validate
-
-# %%
-%xpath_load books.xml
+# ## Validate
 
 # %%
 %xpath_validate books.xml
@@ -62,43 +59,43 @@
 
 # %%
 # Get all book titles
-%%xpath
+%%xpath books.xml
 //book/title/text()
 
 # %%
 # Get tech book titles
-%%xpath
+%%xpath books.xml
 //book[@category='tech']/title/text()
 
 # %%
 # Books over $30
-%%xpath
+%%xpath books.xml
 //book[price > 30]/title/text()
 
 # %%
 # Count books
-%%xpath
+%%xpath books.xml
 count(//book)
 
 # %%
-# Get all authors (sorted is XPath 1.0 — no sort, just retrieval)
-%%xpath
+# Get all authors
+%%xpath books.xml
 //book/author/text()
 
 # %%
 # Get titles in Thai language
-%%xpath
+%%xpath books.xml
 //book/title[@lang='th']/text()
 
 # %% [markdown]
 # ## Formatted XML Output
 
 # %%
-%%xpath --format
+%%xpath --format books.xml
 //book[@category='tech']
 
 # %%
-%%xpath --format
+%%xpath --format books.xml
 //book[year < 1950]
 
 # %% [markdown]
@@ -133,7 +130,7 @@ count(//book)
 //a/@href
 
 # %% [markdown]
-# ## Query a Different File Inline
+# ## Query Another File
 
 # %%
 %%writefile employees.xml

@@ -56,11 +56,7 @@ Query XML (and HTML) files using XPath expressions, powered by `xmllint`.
 ```
 
 ```python
-%xpath_load books.xml
-```
-
-```python
-%%xpath
+%%xpath books.xml
 //book[@category='tech']/title/text()
 ```
 ```
@@ -68,7 +64,7 @@ Python Cookbook
 ```
 
 ```python
-%%xpath --format
+%%xpath --format books.xml
 //book[@category='tech']
 ```
 ```xml
@@ -82,16 +78,15 @@ Python Cookbook
 
 | Command | Description |
 |---------|-------------|
-| `%xpath_load file.xml` | Set default XML file |
-| `%xpath_info` | Show xmllint version and settings |
+| `%xpath_info` | Show xmllint version |
 | `%xpath_validate file.xml` | Check well-formedness |
 | `%xpath_validate --dtd s.dtd f.xml` | Validate against DTD |
 | `%xpath_validate --xsd s.xsd f.xml` | Validate against XSD |
 | `%xpath_validate --rng s.rng f.xml` | Validate against RelaxNG |
-| `%%xpath [file]` | Run XPath query |
-| `%%xpath --format [file]` | Run query, pretty-print XML output |
-| `%%xpath --html [file]` | Parse as HTML instead of XML |
-| `%%xpath --ns prefix=uri [file]` | Register namespace (repeatable) |
+| `%%xpath file.xml` | Run XPath query |
+| `%%xpath --format file.xml` | Run query, pretty-print XML output |
+| `%%xpath --html file.html` | Parse as HTML instead of XML |
+| `%%xpath --ns prefix=uri file.xml` | Register namespace (repeatable) |
 
 ---
 

@@ -5,15 +5,13 @@ Usage:
     %load_ext cellspell          # Or load all spells
 
 Commands:
-    %xpath_load books.xml              Set default XML file
-    %xpath_info                        Show xmllint version and settings
+    %xpath_info                        Show xmllint version
     %xpath_validate file.xml           Check well-formedness
     %xpath_validate --dtd s.dtd f.xml  Validate against DTD
     %xpath_validate --xsd s.xsd f.xml  Validate against XSD
     %xpath_validate --rng s.rng f.xml  Validate against RelaxNG
 
-    %%xpath                            Query default file
-    %%xpath books.xml                  Query specific file
+    %%xpath books.xml                  Query an XML file
     %%xpath --format books.xml         Pretty-print XML results
     %%xpath --html page.html           Parse as HTML
     %%xpath --ns dc=http://... f.xml   With namespace
@@ -78,42 +76,13 @@ def _format_xml(xml_string):
 class XPathMagics(Magics):
     """Jupyter magics for running XPath queries via xmllint."""
 
-    _default_file = None
-
-    @line_magic
-    def xpath_load(self, line):
-        """Set the default XML file for %%xpath queries.
-
-        Usage: %xpath_load <filename>
-        """
-        filepath = line.strip()
-        if not filepath:
-            if self._default_file:
-                print(f"Current default: {self._default_file}")
-            else:
-                print("No default file set. Usage: %xpath_load <filename>")
-            return
-
-        path = Path(filepath)
-        if not path.exists():
-            print(f"Error: File not found: {filepath}")
-            return
-
-        stdout, stderr, rc = _run_xmllint(["--noout", filepath])
-        if rc != 0:
-            print(f"Warning: XML may not be well-formed:\n{stderr}")
-
-        self._default_file = filepath
-        print(f"✓ Loaded: {filepath}")
-
     @line_magic
     def xpath_info(self, line):
-        """Show current XPath magic settings."""
+        """Show xmllint version."""
         _check_xmllint()
         _, stderr, _ = _run_xmllint(["--version"])
         version = stderr.strip()
-        print(f"xmllint:      {version}")
-        print(f"Default file: {self._default_file or '(none)'}")
+        print(f"xmllint: {version}")
 
     @line_magic
     def xpath_validate(self, line):
@@ -168,7 +137,7 @@ class XPathMagics(Magics):
             --ns P=URI   Register namespace prefix (repeatable)
 
         Usage:
-            %%xpath [options] [filename]
+            %%xpath file.xml
             <xpath expression>
         """
         _check_xmllint()
@@ -198,12 +167,7 @@ class XPathMagics(Magics):
                 return
 
         if xml_file is None:
-            xml_file = self._default_file
-        if xml_file is None:
-            print(
-                "Error: No XML file specified.\n"
-                "Use: %%xpath <filename> or %xpath_load <filename>"
-            )
+            print("Error: No XML file specified. Usage: %%xpath <filename>")
             return
 
         if not Path(xml_file).exists():
@@ -270,7 +234,7 @@ def load_ipython_extension(ipython):
     """
     _check_xmllint()
     ipython.register_magics(XPathMagics)
-    print("✓ xpath spell loaded — %xpath_load, %xpath_info, %xpath_validate, %%xpath")
+    print("✓ xpath spell loaded — %xpath_info, %xpath_validate, %%xpath")
 
 
 def unload_ipython_extension(ipython):
