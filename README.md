@@ -205,8 +205,9 @@ LIMIT 5
 | `%sparql_endpoint <url>` | Set default remote endpoint |
 | `%sparql_info` | Show loaded graph and endpoint info |
 | `%%sparql` | Query local graph (or default endpoint) |
-| `%%sparql <endpoint-url>` | Query remote endpoint inline |
 | `%%sparql --local` | Force query against local graph |
+| `%%sparql --local file.ttl` | Load file inline and query it |
+| `%%sparql <endpoint-url>` | Query remote endpoint inline |
 
 **Supported RDF formats:** `.ttl` (Turtle), `.rdf`/`.xml`/`.owl` (RDF/XML), `.n3`, `.nt` (N-Triples), `.jsonld`, `.trig`, `.nq`
 

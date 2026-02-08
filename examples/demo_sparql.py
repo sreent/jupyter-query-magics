@@ -119,6 +119,31 @@ ASK {
 }
 
 # %% [markdown]
+# ### One-shot: Load and Query in a Single Cell
+#
+# Use `--local filename.ttl` to load a file inline without a separate `%sparql_load` step.
+
+# %%
+%%writefile planets.ttl
+@prefix ex: <http://example.org/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+ex:earth rdfs:label "Earth" ; ex:radius 6371 .
+ex:mars  rdfs:label "Mars"  ; ex:radius 3390 .
+ex:jupiter rdfs:label "Jupiter" ; ex:radius 69911 .
+
+# %%
+# Load and query in one cell — no %sparql_load needed
+%%sparql --local planets.ttl
+PREFIX ex: <http://example.org/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?name ?radius WHERE {
+    ?planet rdfs:label ?name ;
+            ex:radius ?radius .
+}
+ORDER BY DESC(?radius)
+
+# %% [markdown]
 # ## Part 2: Remote SPARQL Endpoint (Wikidata)
 #
 # Query Wikidata's public SPARQL endpoint directly.

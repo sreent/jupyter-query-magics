@@ -10,6 +10,7 @@ Commands:
     %sparql_info                              Show loaded graph info
 
     %%sparql                                  Query loaded local graph
+    %%sparql --local data.ttl                 Load file and query it
     %%sparql https://query.wikidata.org/sparql  Query remote endpoint
     %%sparql --endpoint https://...           Same, with flag
 """
@@ -252,19 +253,30 @@ class SPARQLMagics(Magics):
             %%sparql https://query.wikidata.org/sparql Query remote endpoint
             %%sparql --endpoint https://...            Same, with flag
             %%sparql --local                           Force local graph
+            %%sparql --local data.ttl                  Load file and query it
         """
         parts = line.strip().split()
         endpoint = None
         force_local = False
+        local_file = None
+        rdf_format = None
 
         i = 0
         while i < len(parts):
             if parts[i] in ("--endpoint", "-e") and i + 1 < len(parts):
                 endpoint = parts[i + 1]
                 i += 2
+            elif parts[i] == "--format" and i + 1 < len(parts):
+                rdf_format = parts[i + 1]
+                i += 2
             elif parts[i] == "--local":
                 force_local = True
-                i += 1
+                # Check if next arg is a filename (not another flag)
+                if i + 1 < len(parts) and not parts[i + 1].startswith("--"):
+                    local_file = parts[i + 1]
+                    i += 2
+                else:
+                    i += 1
             elif not parts[i].startswith("--"):
                 endpoint = parts[i]
                 i += 1
@@ -277,8 +289,12 @@ class SPARQLMagics(Magics):
             print("Error: No SPARQL query provided.")
             return
 
+        # If --local with a file, load it into the graph first
+        if local_file:
+            self._load_inline_file(local_file, rdf_format)
+
         # Decide: remote endpoint or local graph
-        if force_local:
+        if force_local or local_file:
             self._query_local(query)
         elif endpoint:
             self._query_remote(endpoint, query)
@@ -290,9 +306,38 @@ class SPARQLMagics(Magics):
             print(
                 "Error: No graph or endpoint available.\n"
                 "Use: %sparql_load data.ttl       (local file)\n"
+                "  or: %%sparql --local data.ttl   (inline load + query)\n"
                 "  or: %sparql_endpoint <url>      (remote endpoint)\n"
                 "  or: %%sparql <endpoint-url>     (inline endpoint)"
             )
+
+    def _load_inline_file(self, filepath, rdf_format=None):
+        """Load an RDF file into the graph inline (called from %%sparql --local file)."""
+        rdflib = _check_rdflib()
+        from pathlib import Path
+
+        if not Path(filepath).exists():
+            print(f"Error: File not found: {filepath}")
+            return
+
+        if rdf_format is None:
+            rdf_format = _guess_rdf_format(filepath)
+
+        if self._graph is None:
+            self._graph = rdflib.Graph()
+
+        # Skip if already loaded
+        if filepath in self._loaded_files:
+            return
+
+        try:
+            before = len(self._graph)
+            self._graph.parse(filepath, format=rdf_format)
+            added = len(self._graph) - before
+            self._loaded_files.append(filepath)
+            print(f"✓ Loaded: {filepath} (+{added} triples, {len(self._graph)} total)")
+        except Exception as e:
+            print(f"Error loading {filepath}: {e}")
 
     def _query_local(self, query):
         """Execute SPARQL against the local rdflib graph."""
