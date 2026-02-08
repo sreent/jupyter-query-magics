@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cellspell"
+version = "0.1.0"
+description = "A spellbook of Jupyter cell magics for query languages — XPath, Cypher, SPARQL, MongoDB, and more"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+authors = [
+    {name = "Tarapong"},
+]
+keywords = [
+    "jupyter", "magic", "notebook", "xpath", "cypher", "sparql",
+    "mongodb", "gql", "query", "xml", "graph", "database",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Jupyter",
+    "Framework :: Jupyter :: JupyterLab",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Database",
+    "Topic :: Text Processing :: Markup :: XML",
+]
+dependencies = [
+    "ipython>=7.0",
+]
+
+[project.optional-dependencies]
+cypher = ["neo4j>=5.0", "kuzu>=0.4"]
+sparql = ["rdflib>=6.0"]
+mongodb = ["pymongo>=4.0"]
+all = ["neo4j>=5.0", "kuzu>=0.4", "rdflib>=6.0", "pymongo>=4.0"]
+dev = ["pytest", "build", "twine"]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/cellspell"
+Documentation = "https://github.com/yourusername/cellspell#readme"
+Issues = "https://github.com/yourusername/cellspell/issues"
+
+[tool.setuptools.packages.find]
+include = ["cellspell*"]
