@@ -178,7 +178,8 @@ SELECT ?planet ?planetLabel WHERE {
 
 | Command | Description |
 |---------|-------------|
-| `%%sparql --file data.ttl` | Query RDF file (via rdflib) |
+| `%%sparql --file data.ttl` | Query single RDF file (via rdflib) |
+| `%%sparql --files a.ttl,b.ttl` | Query multiple RDF files (merged graph) |
 | `%%sparql --file data.rdf --format xml` | Query with explicit RDF format |
 | `%%sparql --endpoint <url>` | Query SPARQL endpoint |
 

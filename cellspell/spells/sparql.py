@@ -5,7 +5,8 @@ Usage:
     %load_ext cellspell           # Or load all spells
 
 Commands:
-    %%sparql --file data.ttl                  Query RDF file (via rdflib)
+    %%sparql --file data.ttl                  Query single RDF file (via rdflib)
+    %%sparql --files a.ttl,b.ttl              Query multiple RDF files
     %%sparql --endpoint https://host/sparql    Query SPARQL endpoint
 """
 
@@ -153,12 +154,14 @@ class SPARQLMagics(Magics):
         """Run a SPARQL query.
 
         Usage:
-            %%sparql --file data.ttl                   Query RDF file (rdflib)
+            %%sparql --file data.ttl                   Query single RDF file (rdflib)
+            %%sparql --files a.ttl,b.ttl               Query multiple RDF files
             %%sparql --endpoint https://host/sparql     Query SPARQL endpoint
         """
         parts = line.strip().split()
         endpoint = None
         rdf_file = None
+        rdf_files = None
         rdf_format = None
 
         i = 0
@@ -168,6 +171,9 @@ class SPARQLMagics(Magics):
                 i += 2
             elif parts[i] in ("--file", "-f") and i + 1 < len(parts):
                 rdf_file = parts[i + 1]
+                i += 2
+            elif parts[i] == "--files" and i + 1 < len(parts):
+                rdf_files = [f.strip() for f in parts[i + 1].split(",") if f.strip()]
                 i += 2
             elif parts[i] == "--format" and i + 1 < len(parts):
                 rdf_format = parts[i + 1]
@@ -181,20 +187,30 @@ class SPARQLMagics(Magics):
             print("Error: No SPARQL query provided.")
             return
 
-        if rdf_file and endpoint:
-            print("Error: Cannot use --file and --endpoint together.")
+        # Check for conflicting options
+        file_opts = sum(1 for x in [rdf_file, rdf_files] if x)
+        if file_opts > 1:
+            print("Error: Cannot use --file and --files together. Use --files for multiple files.")
+            return
+        if (rdf_file or rdf_files) and endpoint:
+            print("Error: Cannot use --file/--files and --endpoint together.")
             return
 
-        if rdf_file:
+        if rdf_files:
+            for f in rdf_files:
+                self._load_file(f, rdf_format)
+            self._query_graph(query)
+        elif rdf_file:
             self._load_file(rdf_file, rdf_format)
             self._query_graph(query)
         elif endpoint:
             self._query_endpoint(endpoint, query)
         else:
             print(
-                "Error: Specify --file or --endpoint.\n"
-                "Use: %%sparql --file data.ttl       (query RDF file via rdflib)\n"
-                "  or: %%sparql --endpoint <url>      (query SPARQL endpoint)"
+                "Error: Specify --file, --files, or --endpoint.\n"
+                "Use: %%sparql --file data.ttl            (query single RDF file)\n"
+                "     %%sparql --files a.ttl,b.ttl        (query multiple RDF files)\n"
+                "  or: %%sparql --endpoint <url>           (query SPARQL endpoint)"
             )
 
     def _load_file(self, filepath, rdf_format=None):

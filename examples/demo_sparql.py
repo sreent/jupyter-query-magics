@@ -134,6 +134,24 @@ SELECT ?name ?radius WHERE {
 ORDER BY DESC(?radius)
 
 # %% [markdown]
+# ### Query Multiple Files with `--files`
+#
+# Use `--files` with comma-separated filenames to merge multiple RDF files into one graph.
+
+# %%
+# Query across both scientists and planets
+%%sparql --files scientists.ttl,planets.ttl
+PREFIX ex: <http://example.org/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?label WHERE {
+    { ?s foaf:name ?label }
+    UNION
+    { ?s rdfs:label ?label }
+}
+ORDER BY ?label
+
+# %% [markdown]
 # ## Part 2: SPARQL Endpoints (Wikidata, Fuseki, etc.)
 #
 # Query any SPARQL endpoint with `--endpoint`.
