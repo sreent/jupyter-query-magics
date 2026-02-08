@@ -16,9 +16,18 @@
 
 # %% [markdown]
 # ## Connect to MongoDB
+#
+# Local server:
 
 # %%
 %mongodb mongodb://admin:secret@localhost:27017/demo
+
+# %% [markdown]
+# Or MongoDB Atlas (cloud):
+#
+# ```python
+# %mongodb mongodb+srv://admin:secret@cluster0.abc123.mongodb.net/demo
+# ```
 
 # %%
 %mongodb

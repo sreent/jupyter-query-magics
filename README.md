@@ -228,6 +228,7 @@ db.users.countDocuments({"active": true})
 | Command | Description |
 |---------|-------------|
 | `%mongodb mongodb://user:pass@host:27017/mydb` | Connect to database |
+| `%mongodb mongodb+srv://user:pass@cluster.mongodb.net/mydb` | Connect to MongoDB Atlas |
 | `%mongodb mongodb://host:27017 -d mydb` | Connect with explicit database |
 | `%mongodb` | Show connection info |
 | `%%mongodb` | Query using stored connection |
