@@ -7,16 +7,16 @@ Write XPath, Cypher, SPARQL, and MongoDB queries directly in notebook cells — 
 ## Installation
 
 ```bash
-pip install cellspell
+pip install git+https://github.com/sreent/jupyter-query-magics.git
 ```
 
 With optional backends:
 
 ```bash
-pip install cellspell[cypher]    # Neo4j support
-pip install cellspell[sparql]    # RDFLib support (local graphs)
-pip install cellspell[mongodb]   # PyMongo support
-pip install cellspell[all]       # Everything
+pip install "git+https://github.com/sreent/jupyter-query-magics.git#egg=cellspell[cypher]"    # Neo4j support
+pip install "git+https://github.com/sreent/jupyter-query-magics.git#egg=cellspell[sparql]"    # RDFLib support (local graphs)
+pip install "git+https://github.com/sreent/jupyter-query-magics.git#egg=cellspell[mongodb]"   # PyMongo support
+pip install "git+https://github.com/sreent/jupyter-query-magics.git#egg=cellspell[all]"       # Everything
 ```
 
 ## Quick Start
