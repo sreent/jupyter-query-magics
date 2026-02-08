@@ -5,13 +5,8 @@ Usage:
     %load_ext cellspell           # Or load all spells
 
 Commands:
-    %sparql_load data.ttl                     Load RDF file into graph
-    %sparql_load data.ttl --format turtle     Specify RDF format explicitly
-    %sparql_info                              Show graph and endpoint info
-
-    %%sparql                                  Query loaded graph
-    %%sparql --file data.ttl                  Load file and query (via rdflib)
-    %%sparql --endpoint https://...           Query SPARQL endpoint
+    %%sparql --file data.ttl                  Query RDF file (via rdflib)
+    %%sparql --endpoint https://host/sparql    Query SPARQL endpoint
 """
 
 import json
@@ -19,7 +14,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from IPython.core.magic import Magics, cell_magic, line_magic, magics_class
+from IPython.core.magic import Magics, cell_magic, magics_class
 
 
 def _check_rdflib():
@@ -151,106 +146,14 @@ class SPARQLMagics(Magics):
     """Jupyter magics for running SPARQL queries."""
 
     _graph = None
-    _default_endpoint = None
     _loaded_files = []
-
-    @line_magic
-    def sparql_load(self, line):
-        """Load an RDF file into the in-memory graph.
-
-        Usage:
-            %sparql_load data.ttl
-            %sparql_load data.rdf --format xml
-            %sparql_load more.ttl              (additive — merges into graph)
-        """
-        rdflib = _check_rdflib()
-
-        parts = line.strip().split()
-        if not parts:
-            if self._loaded_files:
-                print(f"Loaded files: {', '.join(self._loaded_files)}")
-                print(f"Triples: {len(self._graph)}")
-            else:
-                print("No files loaded. Usage: %sparql_load data.ttl")
-            return
-
-        filepath = None
-        rdf_format = None
-
-        i = 0
-        while i < len(parts):
-            if parts[i] == "--format" and i + 1 < len(parts):
-                rdf_format = parts[i + 1]
-                i += 2
-            elif not parts[i].startswith("--"):
-                filepath = parts[i]
-                i += 1
-            else:
-                print(f"Unknown option: {parts[i]}")
-                return
-
-        if filepath is None:
-            print("Usage: %sparql_load data.ttl [--format turtle]")
-            return
-
-        from pathlib import Path
-
-        if not Path(filepath).exists():
-            print(f"Error: File not found: {filepath}")
-            return
-
-        if rdf_format is None:
-            rdf_format = _guess_rdf_format(filepath)
-
-        if self._graph is None:
-            self._graph = rdflib.Graph()
-
-        try:
-            before = len(self._graph)
-            self._graph.parse(filepath, format=rdf_format)
-            added = len(self._graph) - before
-            self._loaded_files.append(filepath)
-            print(f"✓ Loaded: {filepath} (+{added} triples, {len(self._graph)} total)")
-        except Exception as e:
-            print(f"Error loading {filepath}: {e}")
-
-    @line_magic
-    def sparql_endpoint(self, line):
-        """Set a default SPARQL endpoint.
-
-        Usage:
-            %sparql_endpoint https://query.wikidata.org/sparql
-            %sparql_endpoint http://localhost:3030/dataset/sparql
-        """
-        endpoint = line.strip()
-        if not endpoint:
-            if self._default_endpoint:
-                print(f"Current endpoint: {self._default_endpoint}")
-            else:
-                print("No default endpoint. Usage: %sparql_endpoint <url>")
-            return
-
-        self._default_endpoint = endpoint
-        print(f"✓ Default endpoint: {endpoint}")
-
-    @line_magic
-    def sparql_info(self, line):
-        """Show current SPARQL settings."""
-        print(f"Default endpoint: {self._default_endpoint or '(none)'}")
-        if self._graph is not None:
-            print(f"Local graph:      {len(self._graph)} triples")
-            if self._loaded_files:
-                print(f"Loaded files:     {', '.join(self._loaded_files)}")
-        else:
-            print("Local graph:      (empty)")
 
     @cell_magic
     def sparql(self, line, cell):
         """Run a SPARQL query.
 
         Usage:
-            %%sparql                                   Query loaded graph
-            %%sparql --file data.ttl                   Load file and query (rdflib)
+            %%sparql --file data.ttl                   Query RDF file (rdflib)
             %%sparql --endpoint https://host/sparql     Query SPARQL endpoint
         """
         parts = line.strip().split()
@@ -269,10 +172,6 @@ class SPARQLMagics(Magics):
             elif parts[i] == "--format" and i + 1 < len(parts):
                 rdf_format = parts[i + 1]
                 i += 2
-            elif not parts[i].startswith("--"):
-                # Positional arg — guess intent from value
-                endpoint = parts[i]
-                i += 1
             else:
                 print(f"Unknown option: {parts[i]}")
                 return
@@ -282,30 +181,24 @@ class SPARQLMagics(Magics):
             print("Error: No SPARQL query provided.")
             return
 
-        # If --file given, load it into the graph first
-        if rdf_file:
-            self._load_inline_file(rdf_file, rdf_format)
+        if rdf_file and endpoint:
+            print("Error: Cannot use --file and --endpoint together.")
+            return
 
-        # Decide: file-based graph or endpoint
         if rdf_file:
+            self._load_file(rdf_file, rdf_format)
             self._query_graph(query)
         elif endpoint:
             self._query_endpoint(endpoint, query)
-        elif self._default_endpoint:
-            self._query_endpoint(self._default_endpoint, query)
-        elif self._graph is not None:
-            self._query_graph(query)
         else:
             print(
-                "Error: No graph or endpoint available.\n"
-                "Use: %%sparql --file data.ttl      (load file, query via rdflib)\n"
-                "  or: %%sparql --endpoint <url>     (query SPARQL endpoint)\n"
-                "  or: %sparql_load data.ttl         (pre-load file)\n"
-                "  or: %sparql_endpoint <url>        (set default endpoint)"
+                "Error: Specify --file or --endpoint.\n"
+                "Use: %%sparql --file data.ttl       (query RDF file via rdflib)\n"
+                "  or: %%sparql --endpoint <url>      (query SPARQL endpoint)"
             )
 
-    def _load_inline_file(self, filepath, rdf_format=None):
-        """Load an RDF file into the graph (called from %%sparql --file)."""
+    def _load_file(self, filepath, rdf_format=None):
+        """Load an RDF file into the in-memory graph."""
         rdflib = _check_rdflib()
         from pathlib import Path
 
@@ -337,7 +230,7 @@ class SPARQLMagics(Magics):
         _check_rdflib()
 
         if self._graph is None or len(self._graph) == 0:
-            print("Error: No graph loaded. Use %sparql_load data.ttl")
+            print("Error: No graph loaded.")
             return
 
         try:
@@ -347,10 +240,8 @@ class SPARQLMagics(Magics):
             return
 
         if hasattr(results, "vars") and results.vars:
-            # SELECT query
             print(_format_sparql_results(results))
         elif hasattr(results, "graph"):
-            # CONSTRUCT / DESCRIBE query
             output = results.graph.serialize(format="turtle")
             if not output.strip():
                 print("(no results)")
@@ -379,10 +270,7 @@ def load_ipython_extension(ipython):
     Usage: %load_ext cellspell.sparql
     """
     ipython.register_magics(SPARQLMagics)
-    print(
-        "✓ sparql spell loaded — "
-        "%sparql_load, %sparql_endpoint, %sparql_info, %%sparql"
-    )
+    print("✓ sparql spell loaded — %%sparql")
 
 
 def unload_ipython_extension(ipython):

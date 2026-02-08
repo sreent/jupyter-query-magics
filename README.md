@@ -148,12 +148,7 @@ Run SPARQL queries against RDF files (via rdflib) or SPARQL endpoints (Wikidata,
 #### RDF files (via rdflib)
 
 ```python
-# Pre-load a file, then query
-%sparql_load scientists.ttl
-```
-
-```python
-%%sparql
+%%sparql --file scientists.ttl
 PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 SELECT ?name WHERE {
     ?person foaf:name ?name .
@@ -169,13 +164,6 @@ Alan Turing
 (3 rows)
 ```
 
-```python
-# Or load and query in one shot
-%%sparql --file scientists.ttl
-PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-SELECT ?name WHERE { ?person foaf:name ?name }
-```
-
 #### SPARQL endpoints (Wikidata, Fuseki, etc.)
 
 ```python
@@ -186,30 +174,12 @@ SELECT ?planet ?planetLabel WHERE {
 }
 ```
 
-```python
-# Set a default endpoint to avoid repeating the URL
-%sparql_endpoint https://query.wikidata.org/sparql
-
-%%sparql
-SELECT ?country ?countryLabel ?population WHERE {
-    ?country wdt:P31 wd:Q6256 ;
-             wdt:P1082 ?population .
-    SERVICE wikibase:label { bd:serviceParam wikibase:language "en" . }
-}
-ORDER BY DESC(?population)
-LIMIT 5
-```
-
 **All SPARQL commands:**
 
 | Command | Description |
 |---------|-------------|
-| `%sparql_load file.ttl` | Load RDF file into graph (additive) |
-| `%sparql_load file.rdf --format xml` | Load with explicit format |
-| `%sparql_endpoint <url>` | Set default SPARQL endpoint |
-| `%sparql_info` | Show graph and endpoint info |
-| `%%sparql` | Query loaded graph (or default endpoint) |
-| `%%sparql --file data.ttl` | Load file and query (via rdflib) |
+| `%%sparql --file data.ttl` | Query RDF file (via rdflib) |
+| `%%sparql --file data.rdf --format xml` | Query with explicit RDF format |
 | `%%sparql --endpoint <url>` | Query SPARQL endpoint |
 
 **Supported RDF formats:** `.ttl` (Turtle), `.rdf`/`.xml`/`.owl` (RDF/XML), `.n3`, `.nt` (N-Triples), `.jsonld`, `.trig`, `.nq`

@@ -17,7 +17,7 @@
 # %% [markdown]
 # ## Part 1: RDF Files (via rdflib)
 #
-# Load a Turtle file and query it with SPARQL.
+# Query a Turtle file with `--file`.
 
 # %%
 %%writefile scientists.ttl
@@ -56,17 +56,8 @@ ex:darwin a foaf:Person ;
     ex:nationality "British" .
 
 # %%
-%sparql_load scientists.ttl
-
-# %%
-%sparql_info
-
-# %% [markdown]
-# ### Query the Loaded Graph
-
-# %%
 # List all scientists
-%%sparql
+%%sparql --file scientists.ttl
 PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 PREFIX ex: <http://example.org/>
 SELECT ?name ?field WHERE {
@@ -78,7 +69,7 @@ ORDER BY ?name
 
 # %%
 # Computer scientists only
-%%sparql
+%%sparql --file scientists.ttl
 PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 PREFIX ex: <http://example.org/>
 SELECT ?name ?year WHERE {
@@ -90,7 +81,7 @@ SELECT ?name ?year WHERE {
 
 # %%
 # Born before 1900
-%%sparql
+%%sparql --file scientists.ttl
 PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 PREFIX ex: <http://example.org/>
 SELECT ?name ?year WHERE {
@@ -102,7 +93,7 @@ ORDER BY ?year
 
 # %%
 # Count by field
-%%sparql
+%%sparql --file scientists.ttl
 PREFIX ex: <http://example.org/>
 SELECT ?field (COUNT(?person) AS ?count) WHERE {
     ?person ex:field ?field .
@@ -112,16 +103,16 @@ ORDER BY DESC(?count)
 
 # %%
 # ASK query — any American scientists?
-%%sparql
+%%sparql --file scientists.ttl
 PREFIX ex: <http://example.org/>
 ASK {
     ?person ex:nationality "American" .
 }
 
 # %% [markdown]
-# ### One-shot: Load and Query in a Single Cell
+# ### Query a Second File
 #
-# Use `--file filename.ttl` to load a file and query it without a separate `%sparql_load` step.
+# Each `--file` call is cached — the file is only parsed once.
 
 # %%
 %%writefile planets.ttl
@@ -133,7 +124,6 @@ ex:mars  rdfs:label "Mars"  ; ex:radius 3390 .
 ex:jupiter rdfs:label "Jupiter" ; ex:radius 69911 .
 
 # %%
-# Load and query in one cell — no %sparql_load needed
 %%sparql --file planets.ttl
 PREFIX ex: <http://example.org/>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -146,10 +136,18 @@ ORDER BY DESC(?radius)
 # %% [markdown]
 # ## Part 2: SPARQL Endpoints (Wikidata, Fuseki, etc.)
 #
-# Query any SPARQL endpoint directly using `--endpoint`.
+# Query any SPARQL endpoint with `--endpoint`.
 
 # %%
-# Query Wikidata with --endpoint
+# Query Wikidata — list planets
+%%sparql --endpoint https://query.wikidata.org/sparql
+SELECT ?planet ?planetLabel WHERE {
+    ?planet wdt:P31 wd:Q634 .
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "en" . }
+}
+
+# %%
+# Query Wikidata — top 10 countries by population
 %%sparql --endpoint https://query.wikidata.org/sparql
 SELECT ?country ?countryLabel ?population WHERE {
     ?country wdt:P31 wd:Q6256 ;
@@ -158,23 +156,3 @@ SELECT ?country ?countryLabel ?population WHERE {
 }
 ORDER BY DESC(?population)
 LIMIT 10
-
-# %%
-# Set a default endpoint to avoid repeating the URL
-%sparql_endpoint https://query.wikidata.org/sparql
-
-# %%
-# Now queries go to the default endpoint
-%%sparql
-SELECT ?planet ?planetLabel WHERE {
-    ?planet wdt:P31 wd:Q634 .
-    SERVICE wikibase:label { bd:serviceParam wikibase:language "en" . }
-}
-
-# %%
-# Query the file-based graph even with a default endpoint set
-%%sparql --file scientists.ttl
-PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-SELECT ?name WHERE {
-    ?person foaf:name ?name .
-}
