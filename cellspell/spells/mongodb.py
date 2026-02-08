@@ -5,16 +5,14 @@ Usage:
     %load_ext cellspell            # Or load all spells
 
 Commands:
-    %mongodb mongodb://localhost:27017/mydb     Connect to database
-    %mongodb                                    Show connection info
-
-    %%mongodb                                   Query using stored connection
-    db.users.find({"age": {"$gt": 25}}).sort({"age": -1}).limit(5)
+    %mongodb mongodb://localhost:27017/mydb   Connect to database
+    %mongodb                                  Show connection info
+    %%mongodb                                 Query using mongosh syntax
 """
 
 import json
 
-from IPython.core.magic import Magics, line_cell_magic, line_magic, magics_class
+from IPython.core.magic import Magics, line_cell_magic, magics_class
 
 
 def _check_pymongo():
@@ -306,42 +304,6 @@ class MongoDBMagics(Magics):
             self._db_name = None
             print(f"Connection failed: {e}")
 
-    @line_magic
-    def mongo_connect(self, line):
-        """Connect to a MongoDB instance (alias for %mongodb).
-
-        Usage:
-            %mongo_connect mongodb://localhost:27017/mydb
-            %mongo_connect mongodb://localhost:27017 -d mydb
-        """
-        self.mongodb(line, cell=None)
-
-    @line_magic
-    def mongo_info(self, line):
-        """Show current MongoDB connection info."""
-        if self._client is None:
-            print("Not connected. Use %mongodb mongodb://host:27017/mydb")
-            return
-
-        print(f"URI:         {self._uri}")
-        print(f"Database:    {self._db_name or '(none)'}")
-
-        try:
-            info = self._client.server_info()
-            print(f"Server:      MongoDB {info.get('version', '?')}")
-        except Exception as e:
-            print(f"Server:      (unable to retrieve — {e})")
-
-        if self._db is not None:
-            try:
-                collections = self._db.list_collection_names()
-                if collections:
-                    print(f"Collections: {', '.join(sorted(collections))}")
-                else:
-                    print("Collections: (none)")
-            except Exception:
-                pass
-
     @line_cell_magic
     def mongodb(self, line, cell=None):
         """Connect to MongoDB or run a query.
@@ -363,8 +325,7 @@ class MongoDBMagics(Magics):
         # --- Line magic: %mongodb (connect or show info) ---
         if cell is None:
             if not line:
-                # %mongodb with no args — show connection info
-                self.mongo_info("")
+                self._show_info()
                 return
             self._parse_and_connect(line)
             return
@@ -405,6 +366,31 @@ class MongoDBMagics(Magics):
             self._execute(collection, collection_name, method_name, args, chain[1:])
         except Exception as e:
             print(f"MongoDB error: {e}")
+
+    def _show_info(self):
+        """Show current MongoDB connection info."""
+        if self._client is None:
+            print("Not connected. Use %mongodb mongodb://host:27017/mydb")
+            return
+
+        print(f"URI:         {self._uri}")
+        print(f"Database:    {self._db_name or '(none)'}")
+
+        try:
+            info = self._client.server_info()
+            print(f"Server:      MongoDB {info.get('version', '?')}")
+        except Exception as e:
+            print(f"Server:      (unable to retrieve — {e})")
+
+        if self._db is not None:
+            try:
+                collections = self._db.list_collection_names()
+                if collections:
+                    print(f"Collections: {', '.join(sorted(collections))}")
+                else:
+                    print("Collections: (none)")
+            except Exception:
+                pass
 
     def _parse_and_connect(self, line):
         """Parse connection string with optional -d flag and connect."""
