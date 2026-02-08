@@ -322,10 +322,13 @@ class MongoDBMagics(Magics):
         """
         line = line.strip()
 
-        # --- Line magic: %mongodb (connect or show info) ---
+        # --- Line magic: %mongodb (connect, info, or disconnect) ---
         if cell is None:
             if not line:
                 self._show_info()
+                return
+            if line == "--disconnect":
+                self._disconnect()
                 return
             self._parse_and_connect(line)
             return
@@ -392,6 +395,21 @@ class MongoDBMagics(Magics):
             except Exception:
                 pass
 
+    def _disconnect(self):
+        """Close the MongoDB connection."""
+        if self._client is None:
+            print("Not connected.")
+            return
+        try:
+            self._client.close()
+        except Exception:
+            pass
+        self._client = None
+        self._db = None
+        self._uri = None
+        self._db_name = None
+        print("Disconnected.")
+
     def _parse_and_connect(self, line):
         """Parse connection string with optional -d flag and connect."""
         parts = line.strip().split()
@@ -421,12 +439,15 @@ class MongoDBMagics(Magics):
             projection = args[1] if len(args) > 1 else None
             cursor = collection.find(filter_doc, projection)
             cursor = self._apply_cursor_chain(cursor, chain)
-            _print_documents(list(cursor))
+            docs = list(cursor)
+            self.shell.user_ns["_mongodb"] = docs
+            _print_documents(docs)
 
         elif method == "findOne":
             filter_doc = args[0] if len(args) > 0 else {}
             projection = args[1] if len(args) > 1 else None
             doc = collection.find_one(filter_doc, projection)
+            self.shell.user_ns["_mongodb"] = doc
             if doc:
                 print(json.dumps(_serialize_doc(doc), indent=2, ensure_ascii=False))
             else:
@@ -438,15 +459,18 @@ class MongoDBMagics(Magics):
                 print("Error: aggregate() requires an array pipeline.")
                 return
             docs = list(collection.aggregate(pipeline))
+            self.shell.user_ns["_mongodb"] = docs
             _print_documents(docs)
 
         elif method == "countDocuments":
             filter_doc = args[0] if len(args) > 0 else {}
             count = collection.count_documents(filter_doc)
+            self.shell.user_ns["_mongodb"] = count
             print(count)
 
         elif method == "estimatedDocumentCount":
             count = collection.estimated_document_count()
+            self.shell.user_ns["_mongodb"] = count
             print(count)
 
         elif method == "distinct":
@@ -456,6 +480,7 @@ class MongoDBMagics(Magics):
             field = args[0]
             filter_doc = args[1] if len(args) > 1 else {}
             values = collection.distinct(field, filter_doc)
+            self.shell.user_ns["_mongodb"] = values
             for v in values:
                 print(v)
             print(f"\n({len(values)} distinct value{'s' if len(values) != 1 else ''})")
@@ -510,12 +535,6 @@ class MongoDBMagics(Magics):
         elif method == "deleteMany":
             if len(args) < 1:
                 print("Error: deleteMany() requires a filter.")
-                return
-            if not args[0]:
-                print(
-                    "Error: Empty filter for deleteMany — "
-                    "pass a filter or use db.col.drop()"
-                )
                 return
             result = collection.delete_many(args[0])
             print(f"Deleted {result.deleted_count} document(s)")

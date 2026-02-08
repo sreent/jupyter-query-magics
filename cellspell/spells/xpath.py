@@ -1,15 +1,15 @@
-"""cellspell.spells.xpath — XPath cell magic powered by xmllint.
+"""cellspell.spells.xpath — XPath magic powered by xmllint.
 
 Usage:
     %load_ext cellspell.xpath    # Load only this spell
     %load_ext cellspell          # Or load all spells
 
 Commands:
-    %xpath_info                        Show xmllint version
-    %xpath_validate file.xml           Check well-formedness
-    %xpath_validate --dtd s.dtd f.xml  Validate against DTD
-    %xpath_validate --xsd s.xsd f.xml  Validate against XSD
-    %xpath_validate --rng s.rng f.xml  Validate against RelaxNG
+    %xpath                             Show xmllint version
+    %xpath books.xml                   Check well-formedness
+    %xpath --rng s.rng books.xml       Validate against RelaxNG
+    %xpath --dtd s.dtd books.xml       Validate against DTD
+    %xpath --xsd s.xsd books.xml       Validate against XSD
 
     %%xpath books.xml                  Query an XML file
     %%xpath --format books.xml         Pretty-print XML results
@@ -22,7 +22,7 @@ import subprocess
 import textwrap
 from pathlib import Path
 
-from IPython.core.magic import Magics, cell_magic, line_magic, magics_class
+from IPython.core.magic import Magics, line_cell_magic, magics_class
 
 
 def _check_xmllint():
@@ -76,30 +76,21 @@ def _format_xml(xml_string):
 class XPathMagics(Magics):
     """Jupyter magics for running XPath queries via xmllint."""
 
-    @line_magic
-    def xpath_info(self, line):
+    def _show_info(self):
         """Show xmllint version."""
-        _check_xmllint()
         _, stderr, _ = _run_xmllint(["--version"])
         version = stderr.strip()
         print(f"xmllint: {version}")
 
-    @line_magic
-    def xpath_validate(self, line):
+    def _validate(self, parts):
         """Validate an XML file.
 
         Usage:
-            %xpath_validate file.xml
-            %xpath_validate --dtd schema.dtd file.xml
-            %xpath_validate --xsd schema.xsd file.xml
-            %xpath_validate --rng schema.rng file.xml
+            %xpath file.xml
+            %xpath --dtd schema.dtd file.xml
+            %xpath --xsd schema.xsd file.xml
+            %xpath --rng schema.rng file.xml
         """
-        _check_xmllint()
-        parts = line.strip().split()
-        if not parts:
-            print("Usage: %xpath_validate [--dtd file.dtd | --xsd file.xsd | --rng file.rng] file.xml")
-            return
-
         args = ["--noout"]
         i = 0
         while i < len(parts):
@@ -127,22 +118,35 @@ class XPathMagics(Magics):
             print("✗ Validation failed:")
             print(output)
 
-    @cell_magic
-    def xpath(self, line, cell):
-        """Run an XPath query against an XML file using xmllint.
+    @line_cell_magic
+    def xpath(self, line, cell=None):
+        """Run XPath queries or validate XML files.
 
-        Options:
-            --format     Pretty-print XML output
-            --html       Parse input as HTML instead of XML
-            --ns P=URI   Register namespace prefix (repeatable)
+        Line magic (%xpath):
+            %xpath                             Show xmllint version
+            %xpath file.xml                    Check well-formedness
+            %xpath --rng schema.rng file.xml   Validate against RelaxNG
+            %xpath --dtd schema.dtd file.xml   Validate against DTD
+            %xpath --xsd schema.xsd file.xml   Validate against XSD
 
-        Usage:
+        Cell magic (%%xpath):
             %%xpath file.xml
             <xpath expression>
         """
         _check_xmllint()
+        line = line.strip()
 
-        parts = line.strip().split()
+        # Line magic: %xpath
+        if cell is None:
+            if not line:
+                self._show_info()
+                return
+            parts = line.split()
+            self._validate(parts)
+            return
+
+        # Cell magic: %%xpath
+        parts = line.split()
         fmt = False
         html_mode = False
         namespaces = []
@@ -224,6 +228,7 @@ class XPathMagics(Magics):
         if fmt and output.strip().startswith("<"):
             output = _format_xml(output)
 
+        self.shell.user_ns["_xpath"] = output.strip()
         print(output)
 
 
@@ -232,9 +237,8 @@ def load_ipython_extension(ipython):
 
     Usage: %load_ext cellspell.xpath
     """
-    _check_xmllint()
     ipython.register_magics(XPathMagics)
-    print("✓ xpath spell loaded — %xpath_info, %xpath_validate, %%xpath")
+    print("✓ xpath spell loaded — %xpath, %%xpath")
 
 
 def unload_ipython_extension(ipython):
