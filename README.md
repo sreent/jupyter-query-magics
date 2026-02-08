@@ -97,7 +97,7 @@ Run Cypher queries against a Neo4j graph database.
 **Prerequisites:** `pip install cellspell[cypher]` and a running Neo4j instance
 
 ```python
-%cypher_connect bolt://localhost:7687 -u neo4j -p password
+%cypher bolt://localhost:7687 -u neo4j -p password
 ```
 
 ```python
@@ -129,12 +129,11 @@ Alice  | Bob
 
 | Command | Description |
 |---------|-------------|
-| `%cypher_connect bolt://host:7687` | Connect (no auth) |
-| `%cypher_connect bolt://host:7687 -u user -p pass` | Connect with auth |
-| `%cypher_connect bolt://host:7687 -d mydb` | Connect to specific database |
-| `%cypher_info` | Show connection info |
-| `%%cypher` | Query default connection |
-| `%%cypher bolt://host:7687` | Query specific instance inline |
+| `%cypher bolt://host:7687` | Connect (no auth) |
+| `%cypher bolt://host:7687 -u user -p pass` | Connect with auth |
+| `%cypher bolt://host:7687 -d mydb` | Connect to specific database |
+| `%cypher` | Show connection info |
+| `%%cypher` | Query using stored connection |
 | `%%cypher -d mydb` | Query specific database |
 
 ---
@@ -194,7 +193,7 @@ Run MongoDB queries directly in notebook cells using mongosh syntax.
 **Prerequisites:** `pip install cellspell[mongodb]` and a running MongoDB instance
 
 ```python
-%mongodb mongodb://localhost:27017/mydb
+%mongodb mongodb://admin:secret@localhost:27017/mydb
 ```
 
 ```python
@@ -228,11 +227,12 @@ db.users.countDocuments({"active": true})
 
 | Command | Description |
 |---------|-------------|
-| `%mongodb mongodb://host:27017/mydb` | Connect to database |
-| `%mongodb <uri> -d mydb` | Connect with explicit database |
+| `%mongodb mongodb://user:pass@host:27017/mydb` | Connect to database |
+| `%mongodb mongodb+srv://user:pass@cluster.mongodb.net/mydb` | Connect to MongoDB Atlas |
+| `%mongodb mongodb://host:27017 -d mydb` | Connect with explicit database |
 | `%mongodb` | Show connection info |
 | `%%mongodb` | Query using stored connection |
-| `%%mongodb mongodb://host:27017/mydb` | Connect and query in one cell |
+| `%%mongodb mongodb://user:pass@host:27017/mydb` | Connect and query in one cell |
 
 **Supported methods:**
 
