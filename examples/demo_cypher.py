@@ -19,10 +19,10 @@
 
 # %%
 # Connect with authentication
-%cypher_connect bolt://localhost:7687 -u neo4j -p password
+%cypher bolt://localhost:7687 -u neo4j -p password
 
 # %%
-%cypher_info
+%cypher
 
 # %% [markdown]
 # ## Create Sample Data

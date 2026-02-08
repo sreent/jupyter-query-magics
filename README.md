@@ -97,7 +97,7 @@ Run Cypher queries against a Neo4j graph database.
 **Prerequisites:** `pip install cellspell[cypher]` and a running Neo4j instance
 
 ```python
-%cypher_connect bolt://localhost:7687 -u neo4j -p password
+%cypher bolt://localhost:7687 -u neo4j -p password
 ```
 
 ```python
@@ -129,12 +129,11 @@ Alice  | Bob
 
 | Command | Description |
 |---------|-------------|
-| `%cypher_connect bolt://host:7687` | Connect (no auth) |
-| `%cypher_connect bolt://host:7687 -u user -p pass` | Connect with auth |
-| `%cypher_connect bolt://host:7687 -d mydb` | Connect to specific database |
-| `%cypher_info` | Show connection info |
-| `%%cypher` | Query default connection |
-| `%%cypher bolt://host:7687` | Query specific instance inline |
+| `%cypher bolt://host:7687` | Connect (no auth) |
+| `%cypher bolt://host:7687 -u user -p pass` | Connect with auth |
+| `%cypher bolt://host:7687 -d mydb` | Connect to specific database |
+| `%cypher` | Show connection info |
+| `%%cypher` | Query using stored connection |
 | `%%cypher -d mydb` | Query specific database |
 
 ---
