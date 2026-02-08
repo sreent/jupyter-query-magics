@@ -13,10 +13,10 @@ pip install git+https://github.com/sreent/jupyter-query-magics.git
 With optional backends:
 
 ```bash
-pip install "git+https://github.com/sreent/jupyter-query-magics.git#egg=cellspell[cypher]"    # Neo4j
-pip install "git+https://github.com/sreent/jupyter-query-magics.git#egg=cellspell[sparql]"    # RDFLib
-pip install "git+https://github.com/sreent/jupyter-query-magics.git#egg=cellspell[mongodb]"   # PyMongo
-pip install "git+https://github.com/sreent/jupyter-query-magics.git#egg=cellspell[all]"       # Everything
+pip install "cellspell[cypher] @ git+https://github.com/sreent/jupyter-query-magics.git"    # Neo4j
+pip install "cellspell[sparql] @ git+https://github.com/sreent/jupyter-query-magics.git"    # RDFLib
+pip install "cellspell[mongodb] @ git+https://github.com/sreent/jupyter-query-magics.git"   # PyMongo
+pip install "cellspell[all] @ git+https://github.com/sreent/jupyter-query-magics.git"       # Everything
 ```
 
 ## Quick Start
@@ -59,7 +59,7 @@ Python Cookbook
 ```
 
 ```python
-%%xpath --format books.xml
+%%xpath books.xml
 //book[@category='tech']
 ```
 ```xml
@@ -78,8 +78,8 @@ Python Cookbook
 | `%xpath --dtd s.dtd f.xml` | Validate against DTD |
 | `%xpath --xsd s.xsd f.xml` | Validate against XSD |
 | `%xpath --rng s.rng f.xml` | Validate against RelaxNG |
-| `%%xpath file.xml` | Run XPath query |
-| `%%xpath --format file.xml` | Pretty-print XML output |
+| `%%xpath file.xml` | Run XPath query (XML output is formatted by default) |
+| `%%xpath --no-format file.xml` | Raw output without pretty-printing |
 | `%%xpath --html file.html` | Parse as HTML instead of XML |
 | `%%xpath --ns prefix=uri file.xml` | Register namespace (repeatable) |
 
@@ -94,7 +94,7 @@ Run Cypher queries against a Neo4j graph database.
 **Prerequisites:** A running Neo4j instance and:
 
 ```bash
-pip install "git+https://github.com/sreent/jupyter-query-magics.git#egg=cellspell[cypher]"
+pip install "cellspell[cypher] @ git+https://github.com/sreent/jupyter-query-magics.git"
 ```
 
 **Example:**
@@ -151,7 +151,7 @@ Run SPARQL queries against RDF files (via rdflib) or SPARQL endpoints (Wikidata,
 **Prerequisites:** For file-based queries:
 
 ```bash
-pip install "git+https://github.com/sreent/jupyter-query-magics.git#egg=cellspell[sparql]"
+pip install "cellspell[sparql] @ git+https://github.com/sreent/jupyter-query-magics.git"
 ```
 
 Endpoint queries work with no extra dependencies.
@@ -209,7 +209,7 @@ Run MongoDB queries directly in notebook cells using mongosh syntax.
 **Prerequisites:** A running MongoDB instance and:
 
 ```bash
-pip install "git+https://github.com/sreent/jupyter-query-magics.git#egg=cellspell[mongodb]"
+pip install "cellspell[mongodb] @ git+https://github.com/sreent/jupyter-query-magics.git"
 ```
 
 **Example:**

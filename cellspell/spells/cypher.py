@@ -72,7 +72,7 @@ class CypherMagics(Magics):
 
         try:
             if user and password:
-                auth = neo4j.auth.basic_auth(user, password)
+                auth = neo4j.basic_auth(user, password)
                 self._driver = neo4j.GraphDatabase.driver(uri, auth=auth)
             else:
                 self._driver = neo4j.GraphDatabase.driver(uri)
