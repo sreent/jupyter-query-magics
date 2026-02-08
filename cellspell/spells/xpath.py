@@ -10,6 +10,7 @@ Commands:
     %xpath_validate file.xml           Check well-formedness
     %xpath_validate --dtd s.dtd f.xml  Validate against DTD
     %xpath_validate --xsd s.xsd f.xml  Validate against XSD
+    %xpath_validate --rng s.rng f.xml  Validate against RelaxNG
 
     %%xpath                            Query default file
     %%xpath books.xml                  Query specific file
@@ -122,11 +123,12 @@ class XPathMagics(Magics):
             %xpath_validate file.xml
             %xpath_validate --dtd schema.dtd file.xml
             %xpath_validate --xsd schema.xsd file.xml
+            %xpath_validate --rng schema.rng file.xml
         """
         _check_xmllint()
         parts = line.strip().split()
         if not parts:
-            print("Usage: %xpath_validate [--dtd file.dtd | --xsd file.xsd] file.xml")
+            print("Usage: %xpath_validate [--dtd file.dtd | --xsd file.xsd | --rng file.rng] file.xml")
             return
 
         args = ["--noout"]
@@ -137,6 +139,9 @@ class XPathMagics(Magics):
                 i += 2
             elif parts[i] == "--xsd" and i + 1 < len(parts):
                 args.extend(["--schema", parts[i + 1]])
+                i += 2
+            elif parts[i] == "--rng" and i + 1 < len(parts):
+                args.extend(["--relaxng", parts[i + 1]])
                 i += 2
             else:
                 args.append(parts[i])

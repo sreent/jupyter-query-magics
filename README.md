@@ -87,6 +87,7 @@ Python Cookbook
 | `%xpath_validate file.xml` | Check well-formedness |
 | `%xpath_validate --dtd s.dtd f.xml` | Validate against DTD |
 | `%xpath_validate --xsd s.xsd f.xml` | Validate against XSD |
+| `%xpath_validate --rng s.rng f.xml` | Validate against RelaxNG |
 | `%%xpath [file]` | Run XPath query |
 | `%%xpath --format [file]` | Run query, pretty-print XML output |
 | `%%xpath --html [file]` | Parse as HTML instead of XML |
