@@ -149,8 +149,8 @@ ORDER BY DESC(?radius)
 # Query Wikidata's public SPARQL endpoint directly.
 
 # %%
-# List 10 countries and their populations
-%%sparql https://query.wikidata.org/sparql
+# List 10 countries and their populations (--remote flag)
+%%sparql --remote https://query.wikidata.org/sparql
 SELECT ?country ?countryLabel ?population WHERE {
     ?country wdt:P31 wd:Q6256 ;
              wdt:P1082 ?population .

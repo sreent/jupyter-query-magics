@@ -175,7 +175,7 @@ Alan Turing
 #### Remote endpoints (e.g. Wikidata)
 
 ```python
-%%sparql https://query.wikidata.org/sparql
+%%sparql --remote https://query.wikidata.org/sparql
 SELECT ?planet ?planetLabel WHERE {
     ?planet wdt:P31 wd:Q634 .
     SERVICE wikibase:label { bd:serviceParam wikibase:language "en" . }
@@ -207,7 +207,8 @@ LIMIT 5
 | `%%sparql` | Query local graph (or default endpoint) |
 | `%%sparql --local` | Force query against local graph |
 | `%%sparql --local file.ttl` | Load file inline and query it |
-| `%%sparql <endpoint-url>` | Query remote endpoint inline |
+| `%%sparql --remote <url>` | Query remote endpoint |
+| `%%sparql <endpoint-url>` | Same, positional shorthand |
 
 **Supported RDF formats:** `.ttl` (Turtle), `.rdf`/`.xml`/`.owl` (RDF/XML), `.n3`, `.nt` (N-Triples), `.jsonld`, `.trig`, `.nq`
 

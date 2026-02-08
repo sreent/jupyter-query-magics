@@ -11,8 +11,8 @@ Commands:
 
     %%sparql                                  Query loaded local graph
     %%sparql --local data.ttl                 Load file and query it
-    %%sparql https://query.wikidata.org/sparql  Query remote endpoint
-    %%sparql --endpoint https://...           Same, with flag
+    %%sparql --remote https://endpoint        Query remote endpoint
+    %%sparql https://endpoint                 Same, positional
 """
 
 import json
@@ -250,10 +250,10 @@ class SPARQLMagics(Magics):
 
         Usage:
             %%sparql                                   Query local graph
-            %%sparql https://query.wikidata.org/sparql Query remote endpoint
-            %%sparql --endpoint https://...            Same, with flag
             %%sparql --local                           Force local graph
             %%sparql --local data.ttl                  Load file and query it
+            %%sparql --remote https://query.wikidata.org/sparql
+            %%sparql https://query.wikidata.org/sparql (same, positional)
         """
         parts = line.strip().split()
         endpoint = None
@@ -263,7 +263,7 @@ class SPARQLMagics(Magics):
 
         i = 0
         while i < len(parts):
-            if parts[i] in ("--endpoint", "-e") and i + 1 < len(parts):
+            if parts[i] in ("--remote", "--endpoint", "-e") and i + 1 < len(parts):
                 endpoint = parts[i + 1]
                 i += 2
             elif parts[i] == "--format" and i + 1 < len(parts):
@@ -305,10 +305,10 @@ class SPARQLMagics(Magics):
         else:
             print(
                 "Error: No graph or endpoint available.\n"
-                "Use: %sparql_load data.ttl       (local file)\n"
-                "  or: %%sparql --local data.ttl   (inline load + query)\n"
-                "  or: %sparql_endpoint <url>      (remote endpoint)\n"
-                "  or: %%sparql <endpoint-url>     (inline endpoint)"
+                "Use: %%sparql --local data.ttl    (local file)\n"
+                "  or: %%sparql --remote <url>      (remote endpoint)\n"
+                "  or: %sparql_load data.ttl        (pre-load file)\n"
+                "  or: %sparql_endpoint <url>       (set default endpoint)"
             )
 
     def _load_inline_file(self, filepath, rdf_format=None):
