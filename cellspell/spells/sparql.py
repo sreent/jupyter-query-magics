@@ -1,13 +1,15 @@
-"""cellspell.spells.sparql — SPARQL cell magic powered by RDFLib and HTTP.
+"""cellspell.spells.sparql — SPARQL magic powered by RDFLib and HTTP.
 
 Usage:
     %load_ext cellspell.sparql    # Load only this spell
     %load_ext cellspell           # Or load all spells
 
 Commands:
-    %%sparql --file data.ttl                  Query single RDF file (via rdflib)
-    %%sparql --files a.ttl,b.ttl              Query multiple RDF files
-    %%sparql --endpoint https://host/sparql    Query SPARQL endpoint
+    %sparql                                       Show loaded graph info
+    %sparql --reset                                Clear loaded graph
+    %%sparql --file data.ttl                       Query single RDF file (via rdflib)
+    %%sparql --files a.ttl,b.ttl                   Query multiple RDF files
+    %%sparql --endpoint https://host/sparql         Query SPARQL endpoint
 """
 
 import json
@@ -15,7 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from IPython.core.magic import Magics, cell_magic, magics_class
+from IPython.core.magic import Magics, line_cell_magic, magics_class
 
 
 def _check_rdflib():
@@ -51,16 +53,10 @@ def _guess_rdf_format(filename):
     }.get(ext, "turtle")
 
 
-def _format_sparql_results(results):
-    """Format rdflib SPARQL SELECT results as a text table."""
-    rows = list(results)
-    if not rows:
+def _format_table(keys, str_rows):
+    """Format rows as an aligned text table with header."""
+    if not str_rows:
         return "(no results)"
-
-    keys = [str(v) for v in results.vars]
-    str_rows = []
-    for row in rows:
-        str_rows.append([str(val) if val is not None else "" for val in row])
 
     col_widths = [len(k) for k in keys]
     for row in str_rows:
@@ -79,7 +75,7 @@ def _format_sparql_results(results):
 
 
 def _query_remote_endpoint(endpoint, query):
-    """Send a SPARQL query to an HTTP endpoint and return formatted results."""
+    """Send a SPARQL query to an HTTP endpoint and return (formatted_output, raw_data)."""
     data = urllib.parse.urlencode({"query": query}).encode("utf-8")
     headers = {
         "Accept": "application/sparql-results+json, application/json",
@@ -98,48 +94,34 @@ def _query_remote_endpoint(endpoint, query):
     except urllib.error.URLError as e:
         raise RuntimeError(f"Cannot reach endpoint: {e.reason}")
 
-    result = json.loads(body)
+    try:
+        result = json.loads(body)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"Invalid JSON response from endpoint: {e}")
 
     if "results" in result and "bindings" in result["results"]:
-        return _format_json_sparql_results(result)
+        keys = result["head"]["vars"]
+        bindings = result["results"]["bindings"]
+
+        if not bindings:
+            return "(no results)", []
+
+        str_rows = []
+        for binding in bindings:
+            row = []
+            for k in keys:
+                if k in binding:
+                    row.append(binding[k].get("value", ""))
+                else:
+                    row.append("")
+            str_rows.append(row)
+
+        raw_data = [dict(zip(keys, row)) for row in str_rows]
+        return _format_table(keys, str_rows), raw_data
     elif "boolean" in result:
-        return f"Result: {result['boolean']}"
+        return f"Result: {result['boolean']}", result["boolean"]
     else:
-        return body
-
-
-def _format_json_sparql_results(result):
-    """Format JSON SPARQL results (application/sparql-results+json) as a text table."""
-    keys = result["head"]["vars"]
-    bindings = result["results"]["bindings"]
-
-    if not bindings:
-        return "(no results)"
-
-    str_rows = []
-    for binding in bindings:
-        row = []
-        for k in keys:
-            if k in binding:
-                row.append(binding[k].get("value", ""))
-            else:
-                row.append("")
-        str_rows.append(row)
-
-    col_widths = [len(k) for k in keys]
-    for row in str_rows:
-        for i, val in enumerate(row):
-            col_widths[i] = max(col_widths[i], len(val))
-
-    header = " | ".join(k.ljust(col_widths[i]) for i, k in enumerate(keys))
-    separator = "-+-".join("-" * w for w in col_widths)
-
-    lines = [header, separator]
-    for row in str_rows:
-        lines.append(" | ".join(val.ljust(col_widths[i]) for i, val in enumerate(row)))
-
-    lines.append(f"\n({len(str_rows)} row{'s' if len(str_rows) != 1 else ''})")
-    return "\n".join(lines)
+        return body, None
 
 
 @magics_class
@@ -149,16 +131,52 @@ class SPARQLMagics(Magics):
     _graph = None
     _loaded_files = []
 
-    @cell_magic
-    def sparql(self, line, cell):
-        """Run a SPARQL query.
+    def _show_info(self):
+        """Show loaded graph info."""
+        if self._graph is None or len(self._graph) == 0:
+            print("No graph loaded.")
+            print("Use: %%sparql --file data.ttl")
+            return
+        print(f"Graph: {len(self._graph)} triples")
+        print(f"Files: {', '.join(self._loaded_files)}")
 
-        Usage:
+    def _reset(self):
+        """Clear the loaded graph and file cache."""
+        self._graph = None
+        self._loaded_files = []
+        print("Graph cleared.")
+
+    @line_cell_magic
+    def sparql(self, line, cell=None):
+        """Run a SPARQL query or show graph info.
+
+        Line magic (%sparql):
+            %sparql                Show loaded graph info
+            %sparql --reset        Clear loaded graph
+
+        Cell magic (%%sparql):
             %%sparql --file data.ttl                   Query single RDF file (rdflib)
             %%sparql --files a.ttl,b.ttl               Query multiple RDF files
             %%sparql --endpoint https://host/sparql     Query SPARQL endpoint
         """
-        parts = line.strip().split()
+        line = line.strip()
+
+        # Line magic: %sparql
+        if cell is None:
+            if not line:
+                self._show_info()
+                return
+            if line == "--reset":
+                self._reset()
+                return
+            print(
+                "Usage: %sparql              (show info)\n"
+                "       %sparql --reset      (clear graph)"
+            )
+            return
+
+        # Cell magic: %%sparql
+        parts = line.split()
         endpoint = None
         rdf_file = None
         rdf_files = None
@@ -256,7 +274,13 @@ class SPARQLMagics(Magics):
             return
 
         if hasattr(results, "vars") and results.vars:
-            print(_format_sparql_results(results))
+            rows = list(results)
+            keys = [str(v) for v in results.vars]
+            str_rows = []
+            for row in rows:
+                str_rows.append([str(val) if val is not None else "" for val in row])
+            self.shell.user_ns["_sparql"] = [dict(zip(keys, row)) for row in str_rows]
+            print(_format_table(keys, str_rows))
         elif hasattr(results, "graph"):
             output = results.graph.serialize(format="turtle")
             if not output.strip():
@@ -272,7 +296,9 @@ class SPARQLMagics(Magics):
     def _query_endpoint(self, endpoint, query):
         """Execute SPARQL against an HTTP SPARQL endpoint."""
         try:
-            output = _query_remote_endpoint(endpoint, query)
+            output, data = _query_remote_endpoint(endpoint, query)
+            if data is not None:
+                self.shell.user_ns["_sparql"] = data
             print(output)
         except RuntimeError as e:
             print(f"SPARQL error: {e}")
@@ -286,7 +312,7 @@ def load_ipython_extension(ipython):
     Usage: %load_ext cellspell.sparql
     """
     ipython.register_magics(SPARQLMagics)
-    print("✓ sparql spell loaded — %%sparql")
+    print("✓ sparql spell loaded — %sparql, %%sparql")
 
 
 def unload_ipython_extension(ipython):

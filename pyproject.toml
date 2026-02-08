@@ -38,16 +38,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-cypher = ["neo4j>=5.0", "kuzu>=0.4"]
+cypher = ["neo4j>=5.0"]
 sparql = ["rdflib>=6.0"]
 mongodb = ["pymongo>=4.0"]
-all = ["neo4j>=5.0", "kuzu>=0.4", "rdflib>=6.0", "pymongo>=4.0"]
+all = ["neo4j>=5.0", "rdflib>=6.0", "pymongo>=4.0"]
 dev = ["pytest", "build", "twine"]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/cellspell"
-Documentation = "https://github.com/yourusername/cellspell#readme"
-Issues = "https://github.com/yourusername/cellspell/issues"
+Homepage = "https://github.com/sreent/jupyter-query-magics"
+Documentation = "https://github.com/sreent/jupyter-query-magics#readme"
+Issues = "https://github.com/sreent/jupyter-query-magics/issues"
 
 [tool.setuptools.packages.find]
 include = ["cellspell*"]

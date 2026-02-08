@@ -104,6 +104,20 @@ class CypherMagics(Magics):
         except Exception as e:
             print(f"Server:   (unable to retrieve — {e})")
 
+    def _disconnect(self):
+        """Close the Neo4j connection."""
+        if self._driver is None:
+            print("Not connected.")
+            return
+        try:
+            self._driver.close()
+        except Exception:
+            pass
+        self._driver = None
+        self._uri = None
+        self._database = None
+        print("Disconnected.")
+
     def _parse_and_connect(self, line):
         """Parse connection string with optional flags and connect."""
         parts = line.strip().split()
@@ -150,10 +164,13 @@ class CypherMagics(Magics):
         """
         line = line.strip()
 
-        # --- Line magic: %cypher (connect or show info) ---
+        # --- Line magic: %cypher (connect, info, or disconnect) ---
         if cell is None:
             if not line:
                 self._show_info()
+                return
+            if line == "--disconnect":
+                self._disconnect()
                 return
             self._parse_and_connect(line)
             return
@@ -193,6 +210,7 @@ class CypherMagics(Magics):
                 summary = result.consume()
 
             if records:
+                self.shell.user_ns["_cypher"] = records
                 print(_format_table(records, keys))
                 print(f"\n({len(records)} row{'s' if len(records) != 1 else ''})")
             else:

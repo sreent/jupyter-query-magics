@@ -49,10 +49,10 @@
 # ## Validate
 
 # %%
-%xpath_validate books.xml
+%xpath books.xml
 
 # %%
-%xpath_info
+%xpath
 
 # %% [markdown]
 # ## Basic Queries

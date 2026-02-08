@@ -78,11 +78,11 @@ Python Cookbook
 
 | Command | Description |
 |---------|-------------|
-| `%xpath_info` | Show xmllint version |
-| `%xpath_validate file.xml` | Check well-formedness |
-| `%xpath_validate --dtd s.dtd f.xml` | Validate against DTD |
-| `%xpath_validate --xsd s.xsd f.xml` | Validate against XSD |
-| `%xpath_validate --rng s.rng f.xml` | Validate against RelaxNG |
+| `%xpath` | Show xmllint version |
+| `%xpath file.xml` | Check well-formedness |
+| `%xpath --dtd s.dtd f.xml` | Validate against DTD |
+| `%xpath --xsd s.xsd f.xml` | Validate against XSD |
+| `%xpath --rng s.rng f.xml` | Validate against RelaxNG |
 | `%%xpath file.xml` | Run XPath query |
 | `%%xpath --format file.xml` | Run query, pretty-print XML output |
 | `%%xpath --html file.html` | Parse as HTML instead of XML |
@@ -133,6 +133,7 @@ Alice  | Bob
 | `%cypher bolt://host:7687 -u user -p pass` | Connect with auth |
 | `%cypher bolt://host:7687 -d mydb` | Connect to specific database |
 | `%cypher` | Show connection info |
+| `%cypher --disconnect` | Close connection |
 | `%%cypher` | Query using stored connection |
 | `%%cypher -d mydb` | Query specific database |
 
@@ -177,6 +178,8 @@ SELECT ?planet ?planetLabel WHERE {
 
 | Command | Description |
 |---------|-------------|
+| `%sparql` | Show loaded graph info |
+| `%sparql --reset` | Clear loaded graph |
 | `%%sparql --file data.ttl` | Query single RDF file (via rdflib) |
 | `%%sparql --files a.ttl,b.ttl` | Query multiple RDF files (merged graph) |
 | `%%sparql --file data.rdf --format xml` | Query with explicit RDF format |
@@ -231,6 +234,7 @@ db.users.countDocuments({"active": true})
 | `%mongodb mongodb+srv://user:pass@cluster.mongodb.net/mydb` | Connect to MongoDB Atlas |
 | `%mongodb mongodb://host:27017 -d mydb` | Connect with explicit database |
 | `%mongodb` | Show connection info |
+| `%mongodb --disconnect` | Close connection |
 | `%%mongodb` | Query using stored connection |
 | `%%mongodb mongodb://user:pass@host:27017/mydb` | Connect and query in one cell |
 
@@ -265,6 +269,25 @@ Planned backend: GraphLite
 !apt-get install -y libxml2-utils -qq
 !pip install cellspell[all] -q
 %load_ext cellspell
+```
+
+## Output Variables
+
+Each spell stores the last query result in a Python variable for further processing:
+
+| Spell | Variable | Type |
+|-------|----------|------|
+| XPath | `_xpath` | `str` (raw output text) |
+| Cypher | `_cypher` | `list[dict]` (rows as dicts) |
+| SPARQL | `_sparql` | `list[dict]` (rows as dicts) |
+| MongoDB | `_mongodb` | `list[dict]`, `dict`, `int`, or `list` (depends on method) |
+
+```python
+%%cypher
+MATCH (p:Person) RETURN p.name AS name, p.age AS age
+
+# Then in the next cell:
+_cypher  # [{'name': 'Alice', 'age': 30}, {'name': 'Bob', 'age': 25}]
 ```
 
 ## Architecture
