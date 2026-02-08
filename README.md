@@ -285,6 +285,10 @@ db.users.aggregate([
 | `db.col.deleteOne(filter)` | Delete first match |
 | `db.col.deleteMany(filter)` | Delete all matches |
 | `db.col.drop()` | Drop collection |
+| `db.col.createIndex(keys, options)` | Create an index |
+| `db.createCollection("name")` | Create a collection |
+| `db.col.find(filter).explain()` | Explain query plan |
+| `db.col.aggregate(pipeline).explain()` | Explain aggregation |
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sreent/jupyter-query-magics/blob/main/examples/demo_mongodb.ipynb)
 

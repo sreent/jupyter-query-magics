@@ -204,3 +204,44 @@ class TestParseMongosh:
         col, chain = _parse_mongosh("db.users.find({'name': 'Alice'})")
         assert col == "users"
         assert chain[0][1] == [{"name": "Alice"}]
+
+    def test_createIndex(self):
+        col, chain = _parse_mongosh('db.users.createIndex({"email": 1})')
+        assert col == "users"
+        assert chain[0][0] == "createIndex"
+        assert chain[0][1] == [{"email": 1}]
+
+    def test_createIndex_with_options(self):
+        col, chain = _parse_mongosh(
+            'db.users.createIndex({"email": 1}, {"unique": true})'
+        )
+        assert col == "users"
+        assert chain[0][0] == "createIndex"
+        assert chain[0][1] == [{"email": 1}, {"unique": True}]
+
+    def test_createCollection_db_level(self):
+        col, chain = _parse_mongosh('db.createCollection("logs")')
+        assert col is None
+        assert chain[0][0] == "createCollection"
+        assert chain[0][1] == ["logs"]
+
+    def test_find_with_explain(self):
+        col, chain = _parse_mongosh("db.users.find({}).explain()")
+        assert col == "users"
+        assert len(chain) == 2
+        assert chain[0][0] == "find"
+        assert chain[1][0] == "explain"
+
+    def test_find_with_explain_verbosity(self):
+        col, chain = _parse_mongosh('db.users.find({}).explain("executionStats")')
+        assert col == "users"
+        assert chain[1][0] == "explain"
+        assert chain[1][1] == ["executionStats"]
+
+    def test_aggregate_with_explain(self):
+        col, chain = _parse_mongosh(
+            'db.orders.aggregate([{"$group": {"_id": "$status"}}]).explain()'
+        )
+        assert col == "orders"
+        assert chain[0][0] == "aggregate"
+        assert chain[1][0] == "explain"
