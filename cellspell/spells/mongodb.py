@@ -178,13 +178,14 @@ def _parse_mongosh(text):
         raise ValueError("Missing method call. Expected db.collection.method(...)")
 
     prefix = rest[:first_paren]
-    try:
+    if "." in prefix:
         last_dot = prefix.rindex(".")
-    except ValueError:
-        raise ValueError("Missing method. Expected db.collection.method(...)")
-
-    collection = prefix[:last_dot]
-    rest = rest[last_dot + 1:]  # "find({...}).sort({...}).limit(5)"
+        collection = prefix[:last_dot]
+        rest = rest[last_dot + 1:]  # "find({...}).sort({...}).limit(5)"
+    else:
+        # db-level method like db.createCollection("name")
+        collection = None
+        # rest stays as "createCollection(...)"
 
     # Parse method chain
     chain = []
@@ -364,8 +365,14 @@ class MongoDBMagics(Magics):
             return
 
         try:
-            collection = self._db[collection_name]
             method_name, args = chain[0]
+
+            # db-level methods (no collection)
+            if collection_name is None:
+                self._execute_db(method_name, args)
+                return
+
+            collection = self._db[collection_name]
             self._execute(collection, collection_name, method_name, args, chain[1:])
         except Exception as e:
             print(f"MongoDB error: {e}")
@@ -430,6 +437,22 @@ class MongoDBMagics(Magics):
 
         self._connect(uri, db_name)
 
+    def _execute_db(self, method, args):
+        """Execute a db-level method (no collection)."""
+        if method == "createCollection":
+            if not args or not isinstance(args[0], str):
+                print("Error: createCollection() requires a collection name string.")
+                return
+            name = args[0]
+            opts = args[1] if len(args) > 1 and isinstance(args[1], dict) else {}
+            self._db.create_collection(name, **opts)
+            print(f"Created collection: {name}")
+        else:
+            print(
+                f"Unsupported db-level method: {method}\n"
+                "Supported: db.createCollection(\"name\")"
+            )
+
     def _execute(self, collection, col_name, method, args, chain):
         """Execute a MongoDB method with optional cursor chain."""
 
@@ -437,6 +460,31 @@ class MongoDBMagics(Magics):
         if method == "find":
             filter_doc = args[0] if len(args) > 0 else {}
             projection = args[1] if len(args) > 1 else None
+
+            # Check if explain() is in the chain
+            if any(m == "explain" for m, _ in chain):
+                explain_chain = [(m, a) for m, a in chain if m != "explain"]
+                explain_args = next(
+                    (a for m, a in chain if m == "explain"), []
+                )
+                verbosity = explain_args[0] if explain_args else "queryPlanner"
+                cmd = {"find": col_name, "filter": filter_doc}
+                if projection:
+                    cmd["projection"] = projection
+                for m, a in explain_chain:
+                    if m == "sort" and a:
+                        sort_spec = a[0]
+                        if isinstance(sort_spec, dict):
+                            cmd["sort"] = sort_spec
+                    elif m == "limit" and a:
+                        cmd["limit"] = int(a[0])
+                    elif m == "skip" and a:
+                        cmd["skip"] = int(a[0])
+                result = self._db.command("explain", cmd, verbosity=verbosity)
+                self.shell.user_ns["_mongodb"] = result
+                print(json.dumps(_serialize_doc(result), indent=2, ensure_ascii=False))
+                return
+
             cursor = collection.find(filter_doc, projection)
             cursor = self._apply_cursor_chain(cursor, chain)
             docs = list(cursor)
@@ -458,6 +506,19 @@ class MongoDBMagics(Magics):
             if not isinstance(pipeline, list):
                 print("Error: aggregate() requires an array pipeline.")
                 return
+
+            # Check if explain() is in the chain
+            if any(m == "explain" for m, _ in chain):
+                explain_args = next(
+                    (a for m, a in chain if m == "explain"), []
+                )
+                verbosity = explain_args[0] if explain_args else "queryPlanner"
+                cmd = {"aggregate": col_name, "pipeline": pipeline, "cursor": {}}
+                result = self._db.command("explain", cmd, verbosity=verbosity)
+                self.shell.user_ns["_mongodb"] = result
+                print(json.dumps(_serialize_doc(result), indent=2, ensure_ascii=False))
+                return
+
             docs = list(collection.aggregate(pipeline))
             self.shell.user_ns["_mongodb"] = docs
             _print_documents(docs)
@@ -543,12 +604,33 @@ class MongoDBMagics(Magics):
             collection.drop()
             print(f"Dropped collection: {col_name}")
 
+        # --- Index & schema operations ---
+        elif method == "createIndex":
+            if len(args) < 1:
+                print("Error: createIndex() requires key specification.")
+                return
+            keys = args[0]
+            kwargs = args[1] if len(args) > 1 else {}
+            if isinstance(keys, dict):
+                keys = list(keys.items())
+            if not isinstance(kwargs, dict):
+                kwargs = {}
+            index_name = collection.create_index(keys, **kwargs)
+            print(f"Created index: {index_name}")
+
+        # --- Explain ---
+        elif method == "explain":
+            print(
+                "Error: explain() cannot be called directly.\n"
+                "Chain it after a query: db.col.find({}).explain()"
+            )
+
         else:
             print(
                 f"Unsupported method: {method}\n"
                 "Supported: find, findOne, aggregate, countDocuments, distinct,\n"
                 "           insertOne, insertMany, updateOne, updateMany,\n"
-                "           replaceOne, deleteOne, deleteMany, drop"
+                "           replaceOne, deleteOne, deleteMany, drop, createIndex"
             )
 
     def _apply_cursor_chain(self, cursor, chain):
