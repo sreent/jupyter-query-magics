@@ -18,7 +18,7 @@
 # ## Connect to MongoDB
 
 # %%
-%mongodb mongodb://localhost:27017/demo
+%mongodb mongodb://admin:secret@localhost:27017/demo
 
 # %%
 %mongodb
@@ -117,7 +117,7 @@ db.users.findOne({"name": "Alice"})
 # You can also connect and query in a single cell:
 
 # %%
-%%mongodb mongodb://localhost:27017/demo
+%%mongodb mongodb://admin:secret@localhost:27017/demo
 db.users.find({"role": "engineer"}).sort({"name": 1})
 
 # %% [markdown]
