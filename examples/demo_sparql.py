@@ -1,12 +1,12 @@
 # %% [markdown]
 # # 🔮 cellspell — SPARQL Spell Demo
 #
-# Run SPARQL queries against local TTL files or remote endpoints (like Wikidata).
+# Run SPARQL queries against RDF files (via rdflib) or SPARQL endpoints (Wikidata, Fuseki, etc.).
 #
 # ## Prerequisites
 #
-# - `pip install cellspell[sparql]` (for local graphs via rdflib)
-# - Remote endpoints work with no extra dependencies
+# - `pip install cellspell[sparql]` (for file-based queries via rdflib)
+# - SPARQL endpoints work with no extra dependencies
 
 # %%
 # !pip install cellspell[sparql] -q  # Uncomment to install
@@ -15,7 +15,7 @@
 %load_ext cellspell.sparql
 
 # %% [markdown]
-# ## Part 1: Local TTL File
+# ## Part 1: RDF Files (via rdflib)
 #
 # Load a Turtle file and query it with SPARQL.
 
@@ -62,7 +62,7 @@ ex:darwin a foaf:Person ;
 %sparql_info
 
 # %% [markdown]
-# ### Query the Local Graph
+# ### Query the Loaded Graph
 
 # %%
 # List all scientists
@@ -121,7 +121,7 @@ ASK {
 # %% [markdown]
 # ### One-shot: Load and Query in a Single Cell
 #
-# Use `--local filename.ttl` to load a file inline without a separate `%sparql_load` step.
+# Use `--file filename.ttl` to load a file and query it without a separate `%sparql_load` step.
 
 # %%
 %%writefile planets.ttl
@@ -134,7 +134,7 @@ ex:jupiter rdfs:label "Jupiter" ; ex:radius 69911 .
 
 # %%
 # Load and query in one cell — no %sparql_load needed
-%%sparql --local planets.ttl
+%%sparql --file planets.ttl
 PREFIX ex: <http://example.org/>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 SELECT ?name ?radius WHERE {
@@ -144,13 +144,13 @@ SELECT ?name ?radius WHERE {
 ORDER BY DESC(?radius)
 
 # %% [markdown]
-# ## Part 2: Remote SPARQL Endpoint (Wikidata)
+# ## Part 2: SPARQL Endpoints (Wikidata, Fuseki, etc.)
 #
-# Query Wikidata's public SPARQL endpoint directly.
+# Query any SPARQL endpoint directly using `--endpoint`.
 
 # %%
-# List 10 countries and their populations (--remote flag)
-%%sparql --remote https://query.wikidata.org/sparql
+# Query Wikidata with --endpoint
+%%sparql --endpoint https://query.wikidata.org/sparql
 SELECT ?country ?countryLabel ?population WHERE {
     ?country wdt:P31 wd:Q6256 ;
              wdt:P1082 ?population .
@@ -160,11 +160,11 @@ ORDER BY DESC(?population)
 LIMIT 10
 
 # %%
-# Set Wikidata as default endpoint
+# Set a default endpoint to avoid repeating the URL
 %sparql_endpoint https://query.wikidata.org/sparql
 
 # %%
-# Now queries go to Wikidata by default
+# Now queries go to the default endpoint
 %%sparql
 SELECT ?planet ?planetLabel WHERE {
     ?planet wdt:P31 wd:Q634 .
@@ -172,8 +172,8 @@ SELECT ?planet ?planetLabel WHERE {
 }
 
 # %%
-# Force local graph even with default endpoint set
-%%sparql --local
+# Query the file-based graph even with a default endpoint set
+%%sparql --file scientists.ttl
 PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 SELECT ?name WHERE {
     ?person foaf:name ?name .

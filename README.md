@@ -143,15 +143,16 @@ Alice  | Bob
 
 ---
 
-### ✅ `%%sparql` — SPARQL queries (local TTL + remote endpoints)
+### ✅ `%%sparql` — SPARQL queries (files + endpoints)
 
-Run SPARQL queries against local RDF files or remote SPARQL endpoints like Wikidata.
+Run SPARQL queries against RDF files (via rdflib) or SPARQL endpoints (Wikidata, Fuseki, etc.).
 
-**Prerequisites:** `pip install cellspell[sparql]` for local graphs; remote endpoints work with no extra dependencies
+**Prerequisites:** `pip install cellspell[sparql]` for file-based queries; endpoints work with no extra dependencies
 
-#### Local TTL files
+#### RDF files (via rdflib)
 
 ```python
+# Pre-load a file, then query
 %sparql_load scientists.ttl
 ```
 
@@ -172,10 +173,17 @@ Alan Turing
 (3 rows)
 ```
 
-#### Remote endpoints (e.g. Wikidata)
+```python
+# Or load and query in one shot
+%%sparql --file scientists.ttl
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+SELECT ?name WHERE { ?person foaf:name ?name }
+```
+
+#### SPARQL endpoints (Wikidata, Fuseki, etc.)
 
 ```python
-%%sparql --remote https://query.wikidata.org/sparql
+%%sparql --endpoint https://query.wikidata.org/sparql
 SELECT ?planet ?planetLabel WHERE {
     ?planet wdt:P31 wd:Q634 .
     SERVICE wikibase:label { bd:serviceParam wikibase:language "en" . }
@@ -200,15 +208,13 @@ LIMIT 5
 
 | Command | Description |
 |---------|-------------|
-| `%sparql_load file.ttl` | Load TTL/RDF into local graph (additive) |
+| `%sparql_load file.ttl` | Load RDF file into graph (additive) |
 | `%sparql_load file.rdf --format xml` | Load with explicit format |
-| `%sparql_endpoint <url>` | Set default remote endpoint |
-| `%sparql_info` | Show loaded graph and endpoint info |
-| `%%sparql` | Query local graph (or default endpoint) |
-| `%%sparql --local` | Force query against local graph |
-| `%%sparql --local file.ttl` | Load file inline and query it |
-| `%%sparql --remote <url>` | Query remote endpoint |
-| `%%sparql <endpoint-url>` | Same, positional shorthand |
+| `%sparql_endpoint <url>` | Set default SPARQL endpoint |
+| `%sparql_info` | Show graph and endpoint info |
+| `%%sparql` | Query loaded graph (or default endpoint) |
+| `%%sparql --file data.ttl` | Load file and query (via rdflib) |
+| `%%sparql --endpoint <url>` | Query SPARQL endpoint |
 
 **Supported RDF formats:** `.ttl` (Turtle), `.rdf`/`.xml`/`.owl` (RDF/XML), `.n3`, `.nt` (N-Triples), `.jsonld`, `.trig`, `.nq`
 
