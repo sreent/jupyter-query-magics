@@ -13,8 +13,8 @@ pip install cellspell
 With optional backends:
 
 ```bash
-pip install cellspell[cypher]    # Neo4j + KùzuDB support
-pip install cellspell[sparql]    # RDFLib support
+pip install cellspell[cypher]    # Neo4j support
+pip install cellspell[sparql]    # RDFLib support (local graphs)
 pip install cellspell[mongodb]   # PyMongo support
 pip install cellspell[all]       # Everything
 ```
@@ -22,11 +22,14 @@ pip install cellspell[all]       # Everything
 ## Quick Start
 
 ```python
-# Load all available spells
+# Load all available spells (skips those without backends installed)
 %load_ext cellspell
 
 # Or load individual spells
 %load_ext cellspell.xpath
+%load_ext cellspell.cypher
+%load_ext cellspell.sparql
+%load_ext cellspell.mongodb
 ```
 
 ## Spells
@@ -53,11 +56,7 @@ Query XML (and HTML) files using XPath expressions, powered by `xmllint`.
 ```
 
 ```python
-%xpath_load books.xml
-```
-
-```python
-%%xpath
+%%xpath books.xml
 //book[@category='tech']/title/text()
 ```
 ```
@@ -65,7 +64,7 @@ Python Cookbook
 ```
 
 ```python
-%%xpath --format
+%%xpath --format books.xml
 //book[@category='tech']
 ```
 ```xml
@@ -79,63 +78,184 @@ Python Cookbook
 
 | Command | Description |
 |---------|-------------|
-| `%xpath_load file.xml` | Set default XML file |
-| `%xpath_info` | Show xmllint version and settings |
+| `%xpath_info` | Show xmllint version |
 | `%xpath_validate file.xml` | Check well-formedness |
 | `%xpath_validate --dtd s.dtd f.xml` | Validate against DTD |
 | `%xpath_validate --xsd s.xsd f.xml` | Validate against XSD |
-| `%%xpath [file]` | Run XPath query |
-| `%%xpath --format [file]` | Run query, pretty-print XML output |
-| `%%xpath --html [file]` | Parse as HTML instead of XML |
-| `%%xpath --ns prefix=uri [file]` | Register namespace (repeatable) |
+| `%xpath_validate --rng s.rng f.xml` | Validate against RelaxNG |
+| `%%xpath file.xml` | Run XPath query |
+| `%%xpath --format file.xml` | Run query, pretty-print XML output |
+| `%%xpath --html file.html` | Parse as HTML instead of XML |
+| `%%xpath --ns prefix=uri file.xml` | Register namespace (repeatable) |
 
-### 🔜 `%%cypher` — Cypher queries (planned)
+---
+
+### ✅ `%%cypher` — Cypher queries via Neo4j
+
+Run Cypher queries against a Neo4j graph database.
+
+**Prerequisites:** `pip install cellspell[cypher]` and a running Neo4j instance
 
 ```python
-%cypher_connect bolt://localhost:7687
+%cypher_connect bolt://localhost:7687 -u neo4j -p password
+```
+
+```python
+%%cypher
+CREATE (a:Person {name: 'Alice', age: 30}),
+       (b:Person {name: 'Bob', age: 25}),
+       (a)-[:KNOWS]->(b)
+```
+```
+Nodes created: 2
+Relationships created: 1
+Properties set: 4
 ```
 
 ```python
 %%cypher
 MATCH (p:Person)-[:KNOWS]->(q:Person)
-RETURN p.name, q.name
+RETURN p.name AS person, q.name AS knows
+```
+```
+person | knows
+-------+------
+Alice  | Bob
+
+(1 row)
 ```
 
-Planned backends: Neo4j, KùzuDB
+**All Cypher commands:**
 
-### 🔜 `%%sparql` — SPARQL queries (planned)
+| Command | Description |
+|---------|-------------|
+| `%cypher_connect bolt://host:7687` | Connect (no auth) |
+| `%cypher_connect bolt://host:7687 -u user -p pass` | Connect with auth |
+| `%cypher_connect bolt://host:7687 -d mydb` | Connect to specific database |
+| `%cypher_info` | Show connection info |
+| `%%cypher` | Query default connection |
+| `%%cypher bolt://host:7687` | Query specific instance inline |
+| `%%cypher -d mydb` | Query specific database |
+
+---
+
+### ✅ `%%sparql` — SPARQL queries (files + endpoints)
+
+Run SPARQL queries against RDF files (via rdflib) or SPARQL endpoints (Wikidata, Fuseki, etc.).
+
+**Prerequisites:** `pip install cellspell[sparql]` for file-based queries; endpoints work with no extra dependencies
+
+#### RDF files (via rdflib)
 
 ```python
-%%sparql https://dbpedia.org/sparql
+%%sparql --file scientists.ttl
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 SELECT ?name WHERE {
-    ?person a dbo:Scientist ;
-            rdfs:label ?name .
-    FILTER(LANG(?name) = "en")
-} LIMIT 10
+    ?person foaf:name ?name .
+}
+```
+```
+name
+-----------------
+Albert Einstein
+Marie Curie
+Alan Turing
+
+(3 rows)
 ```
 
-Planned backends: RDFLib, Oxigraph, remote endpoints
-
-### 🔜 `%%mongodb` — MongoDB queries (planned)
+#### SPARQL endpoints (Wikidata, Fuseki, etc.)
 
 ```python
-%mongo_connect mongodb://localhost:27017/mydb
+%%sparql --endpoint https://query.wikidata.org/sparql
+SELECT ?planet ?planetLabel WHERE {
+    ?planet wdt:P31 wd:Q634 .
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "en" . }
+}
+```
+
+**All SPARQL commands:**
+
+| Command | Description |
+|---------|-------------|
+| `%%sparql --file data.ttl` | Query single RDF file (via rdflib) |
+| `%%sparql --files a.ttl,b.ttl` | Query multiple RDF files (merged graph) |
+| `%%sparql --file data.rdf --format xml` | Query with explicit RDF format |
+| `%%sparql --endpoint <url>` | Query SPARQL endpoint |
+
+**Supported RDF formats:** `.ttl` (Turtle), `.rdf`/`.xml`/`.owl` (RDF/XML), `.n3`, `.nt` (N-Triples), `.jsonld`, `.trig`, `.nq`
+
+---
+
+### ✅ `%%mongodb` — MongoDB queries via PyMongo
+
+Run MongoDB queries directly in notebook cells using mongosh syntax.
+
+**Prerequisites:** `pip install cellspell[mongodb]` and a running MongoDB instance
+
+```python
+%mongodb mongodb://localhost:27017/mydb
 ```
 
 ```python
 %%mongodb
-db.users.find({ "age": { "$gt": 25 } })
+db.users.find({"age": {"$gt": 25}}).sort({"age": -1}).limit(5)
 ```
+```json
+{
+  "name": "Alice",
+  "age": 30,
+  "city": "Bangkok"
+}
 
-Planned backend: PyMongo
-
-### 🔜 `%%gql` — ISO GQL queries (planned)
+(1 document)
+```
 
 ```python
-%%gql
-MATCH (p:Person)-[:KNOWS]->(q:Person)
-RETURN p.name, q.name
+%%mongodb
+db.users.aggregate([
+    {"$group": {"_id": "$city", "count": {"$sum": 1}}},
+    {"$sort": {"count": -1}}
+])
 ```
+
+```python
+%%mongodb
+db.users.countDocuments({"active": true})
+```
+
+**All MongoDB commands:**
+
+| Command | Description |
+|---------|-------------|
+| `%mongodb mongodb://host:27017/mydb` | Connect to database |
+| `%mongodb <uri> -d mydb` | Connect with explicit database |
+| `%mongodb` | Show connection info |
+| `%%mongodb` | Query using stored connection |
+| `%%mongodb mongodb://host:27017/mydb` | Connect and query in one cell |
+
+**Supported methods:**
+
+| Method | Description |
+|--------|-------------|
+| `db.col.find(filter, projection)` | Query documents (chain `.sort()`, `.limit()`, `.skip()`) |
+| `db.col.findOne(filter, projection)` | Return single document |
+| `db.col.aggregate(pipeline)` | Run aggregation pipeline |
+| `db.col.countDocuments(filter)` | Count matching documents |
+| `db.col.estimatedDocumentCount()` | Fast estimated count |
+| `db.col.distinct(field, filter)` | Get distinct values |
+| `db.col.insertOne(doc)` | Insert one document |
+| `db.col.insertMany([docs])` | Insert multiple documents |
+| `db.col.updateOne(filter, update)` | Update first match |
+| `db.col.updateMany(filter, update)` | Update all matches |
+| `db.col.replaceOne(filter, doc)` | Replace first match |
+| `db.col.deleteOne(filter)` | Delete first match |
+| `db.col.deleteMany(filter)` | Delete all matches |
+| `db.col.drop()` | Drop collection |
+
+---
+
+### 🔜 `%%gql` — ISO GQL queries (planned)
 
 Planned backend: GraphLite
 
@@ -143,7 +263,7 @@ Planned backend: GraphLite
 
 ```python
 !apt-get install -y libxml2-utils -qq
-!pip install cellspell -q
+!pip install cellspell[all] -q
 %load_ext cellspell
 ```
 
@@ -151,12 +271,12 @@ Planned backend: GraphLite
 
 ```
 cellspell/
-├── __init__.py              # %load_ext cellspell (loads all)
+├── __init__.py              # %load_ext cellspell (loads all available)
 └── spells/
     ├── xpath.py             # %load_ext cellspell.xpath
-    ├── cypher.py            # %load_ext cellspell.cypher    (planned)
-    ├── sparql.py            # %load_ext cellspell.sparql    (planned)
-    ├── mongodb.py           # %load_ext cellspell.mongodb   (planned)
+    ├── cypher.py            # %load_ext cellspell.cypher
+    ├── sparql.py            # %load_ext cellspell.sparql
+    ├── mongodb.py           # %load_ext cellspell.mongodb
     └── gql.py               # %load_ext cellspell.gql       (planned)
 ```
 
