@@ -32,6 +32,17 @@ pip install "cellspell[all] @ git+https://github.com/sreent/jupyter-query-magics
 %load_ext cellspell.mongodb
 ```
 
+## Google Colab
+
+Each spell has a ready-to-run Colab notebook with full setup (server install, sample data, queries):
+
+| Spell | Colab Notebook |
+|-------|----------------|
+| XPath | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sreent/jupyter-query-magics/blob/main/examples/demo_xpath.ipynb) |
+| Cypher | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sreent/jupyter-query-magics/blob/main/examples/demo_cypher.ipynb) |
+| SPARQL | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sreent/jupyter-query-magics/blob/main/examples/demo_sparql.ipynb) |
+| MongoDB | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sreent/jupyter-query-magics/blob/main/examples/demo_mongodb.ipynb) |
+
 ## Spells
 
 ### `%xpath` / `%%xpath` — XPath queries via xmllint
@@ -83,7 +94,7 @@ Python Cookbook
 | `%%xpath --html file.html` | Parse as HTML instead of XML |
 | `%%xpath --ns prefix=uri file.xml` | Register namespace (repeatable) |
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sreent/jupyter-query-magics/blob/main/examples/colab_xpath.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sreent/jupyter-query-magics/blob/main/examples/demo_xpath.ipynb)
 
 ---
 
@@ -140,7 +151,7 @@ Alice  | Bob
 | `%%cypher` | Query using stored connection |
 | `%%cypher -d mydb` | Query specific database |
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sreent/jupyter-query-magics/blob/main/examples/colab_cypher.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sreent/jupyter-query-magics/blob/main/examples/demo_cypher.ipynb)
 
 ---
 
@@ -198,7 +209,7 @@ SELECT ?planet ?planetLabel WHERE {
 
 **Supported RDF formats:** `.ttl` (Turtle), `.rdf`/`.xml`/`.owl` (RDF/XML), `.n3`, `.nt` (N-Triples), `.jsonld`, `.trig`, `.nq`
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sreent/jupyter-query-magics/blob/main/examples/colab_sparql.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sreent/jupyter-query-magics/blob/main/examples/demo_sparql.ipynb)
 
 ---
 
@@ -275,7 +286,7 @@ db.users.aggregate([
 | `db.col.deleteMany(filter)` | Delete all matches |
 | `db.col.drop()` | Drop collection |
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sreent/jupyter-query-magics/blob/main/examples/colab_mongodb.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sreent/jupyter-query-magics/blob/main/examples/demo_mongodb.ipynb)
 
 ## Output Variables
 
@@ -299,26 +310,15 @@ Then in the next cell:
 _cypher  # [{'name': 'Alice', 'age': 30}, {'name': 'Bob', 'age': 25}]
 ```
 
-## Google Colab
-
-Each spell has a ready-to-run Colab notebook with full setup (server install, sample data, queries):
-
-| Spell | Colab Notebook |
-|-------|----------------|
-| XPath | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sreent/jupyter-query-magics/blob/main/examples/colab_xpath.ipynb) |
-| Cypher | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sreent/jupyter-query-magics/blob/main/examples/colab_cypher.ipynb) |
-| SPARQL | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sreent/jupyter-query-magics/blob/main/examples/colab_sparql.ipynb) |
-| MongoDB | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sreent/jupyter-query-magics/blob/main/examples/colab_mongodb.ipynb) |
-
 ## Architecture
 
 ```
 cellspell/
 ├── __init__.py              # %load_ext cellspell (loads all available)
-├── xpath.py                 # Convenience re-export for %load_ext cellspell.xpath
-├── cypher.py                # Convenience re-export for %load_ext cellspell.cypher
-├── sparql.py                # Convenience re-export for %load_ext cellspell.sparql
-├── mongodb.py               # Convenience re-export for %load_ext cellspell.mongodb
+├── xpath.py                 # Convenience wrapper for %load_ext cellspell.xpath
+├── cypher.py                # Convenience wrapper for %load_ext cellspell.cypher
+├── sparql.py                # Convenience wrapper for %load_ext cellspell.sparql
+├── mongodb.py               # Convenience wrapper for %load_ext cellspell.mongodb
 └── spells/
     ├── xpath.py             # XPath magic (xmllint)
     ├── cypher.py            # Cypher magic (neo4j driver)
@@ -331,14 +331,10 @@ tests/
 └── test_xpath_helpers.py    # XPath formatting tests
 
 examples/
-├── colab_xpath.ipynb        # Colab notebook — XPath
-├── colab_cypher.ipynb       # Colab notebook — Cypher
-├── colab_sparql.ipynb       # Colab notebook — SPARQL
-├── colab_mongodb.ipynb      # Colab notebook — MongoDB
-├── demo_xpath.py            # Percent-script demo — XPath
-├── demo_cypher.py           # Percent-script demo — Cypher
-├── demo_sparql.py           # Percent-script demo — SPARQL
-└── demo_mongodb.py          # Percent-script demo — MongoDB
+├── demo_xpath.ipynb         # Colab notebook — XPath
+├── demo_cypher.ipynb        # Colab notebook — Cypher
+├── demo_sparql.ipynb        # Colab notebook — SPARQL
+└── demo_mongodb.ipynb       # Colab notebook — MongoDB
 ```
 
 Each spell is self-contained and can be loaded independently. Spells only import
