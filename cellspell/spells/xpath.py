@@ -11,8 +11,8 @@ Commands:
     %xpath --dtd s.dtd books.xml       Validate against DTD
     %xpath --xsd s.xsd books.xml       Validate against XSD
 
-    %%xpath books.xml                  Query an XML file
-    %%xpath --format books.xml         Pretty-print XML results
+    %%xpath books.xml                  Query an XML file (formatted by default)
+    %%xpath --no-format books.xml      Raw output (no pretty-print)
     %%xpath --html page.html           Parse as HTML
     %%xpath --ns dc=http://... f.xml   With namespace
 """
@@ -147,7 +147,7 @@ class XPathMagics(Magics):
 
         # Cell magic: %%xpath
         parts = line.split()
-        fmt = False
+        fmt = True
         html_mode = False
         namespaces = []
         xml_file = None
@@ -156,6 +156,9 @@ class XPathMagics(Magics):
         while i < len(parts):
             if parts[i] == "--format":
                 fmt = True
+                i += 1
+            elif parts[i] == "--no-format":
+                fmt = False
                 i += 1
             elif parts[i] == "--html":
                 html_mode = True

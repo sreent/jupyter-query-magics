@@ -59,7 +59,7 @@ Python Cookbook
 ```
 
 ```python
-%%xpath --format books.xml
+%%xpath books.xml
 //book[@category='tech']
 ```
 ```xml
@@ -78,8 +78,8 @@ Python Cookbook
 | `%xpath --dtd s.dtd f.xml` | Validate against DTD |
 | `%xpath --xsd s.xsd f.xml` | Validate against XSD |
 | `%xpath --rng s.rng f.xml` | Validate against RelaxNG |
-| `%%xpath file.xml` | Run XPath query |
-| `%%xpath --format file.xml` | Pretty-print XML output |
+| `%%xpath file.xml` | Run XPath query (XML output is formatted by default) |
+| `%%xpath --no-format file.xml` | Raw output without pretty-printing |
 | `%%xpath --html file.html` | Parse as HTML instead of XML |
 | `%%xpath --ns prefix=uri file.xml` | Register namespace (repeatable) |
 

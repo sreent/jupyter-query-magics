@@ -88,14 +88,18 @@ count(//book)
 //book/title[@lang='th']/text()
 
 # %% [markdown]
-# ## Formatted XML Output
+# ## Formatted XML Output (default)
+#
+# XML results are pretty-printed by default. Use `--no-format` for raw output.
 
 # %%
-%%xpath --format books.xml
+# Formatted by default
+%%xpath books.xml
 //book[@category='tech']
 
 # %%
-%%xpath --format books.xml
+# Raw output with --no-format
+%%xpath --no-format books.xml
 //book[year < 1950]
 
 # %% [markdown]
@@ -162,7 +166,7 @@ count(//book)
 //department[@name='Engineering']/employee/name/text()
 
 # %%
-%%xpath --format employees.xml
+%%xpath employees.xml
 //employee[salary > 100000]
 
 # %%
