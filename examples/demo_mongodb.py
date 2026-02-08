@@ -18,10 +18,10 @@
 # ## Connect to MongoDB
 
 # %%
-%mongo_connect mongodb://localhost:27017/demo
+%mongodb mongodb://localhost:27017/demo
 
 # %%
-%mongo_info
+%mongodb
 
 # %% [markdown]
 # ## Insert Sample Data

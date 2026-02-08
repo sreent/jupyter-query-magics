@@ -194,7 +194,7 @@ Run MongoDB queries directly in notebook cells using mongosh syntax.
 **Prerequisites:** `pip install cellspell[mongodb]` and a running MongoDB instance
 
 ```python
-%mongo_connect mongodb://localhost:27017/mydb
+%mongodb mongodb://localhost:27017/mydb
 ```
 
 ```python
@@ -224,22 +224,15 @@ db.users.aggregate([
 db.users.countDocuments({"active": true})
 ```
 
-Inline connection (connect and query in one cell):
-
-```python
-%%mongodb mongodb://localhost:27017/mydb
-db.users.find({})
-```
-
 **All MongoDB commands:**
 
 | Command | Description |
 |---------|-------------|
-| `%mongo_connect mongodb://host:27017/mydb` | Connect to database |
-| `%mongo_connect <uri> -d mydb` | Connect with explicit database |
-| `%mongo_info` | Show connection, server, and collections |
+| `%mongodb mongodb://host:27017/mydb` | Connect to database |
+| `%mongodb <uri> -d mydb` | Connect with explicit database |
+| `%mongodb` | Show connection info |
 | `%%mongodb` | Query using stored connection |
-| `%%mongodb mongodb://host:27017/mydb` | Connect and query inline |
+| `%%mongodb mongodb://host:27017/mydb` | Connect and query in one cell |
 
 **Supported methods:**
 

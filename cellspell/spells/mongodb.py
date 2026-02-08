@@ -5,20 +5,16 @@ Usage:
     %load_ext cellspell            # Or load all spells
 
 Commands:
-    %mongo_connect mongodb://localhost:27017/mydb   Connect to database
-    %mongo_info                                     Show connection info
+    %mongodb mongodb://localhost:27017/mydb     Connect to database
+    %mongodb                                    Show connection info
 
-Cell body uses mongosh syntax:
-    %%mongodb
+    %%mongodb                                   Query using stored connection
     db.users.find({"age": {"$gt": 25}}).sort({"age": -1}).limit(5)
-
-    %%mongodb mongodb://localhost:27017/mydb
-    db.users.aggregate([{"$group": {"_id": "$city"}}])
 """
 
 import json
 
-from IPython.core.magic import Magics, cell_magic, line_magic, magics_class
+from IPython.core.magic import Magics, line_cell_magic, line_magic, magics_class
 
 
 def _check_pymongo():
@@ -301,7 +297,7 @@ class MongoDBMagics(Magics):
             else:
                 print(
                     "  No database selected. "
-                    "Use: %mongo_connect <uri> -d <dbname>"
+                    "Use: %mongodb <uri> -d <dbname>"
                 )
         except Exception as e:
             self._client = None
@@ -312,41 +308,19 @@ class MongoDBMagics(Magics):
 
     @line_magic
     def mongo_connect(self, line):
-        """Connect to a MongoDB instance.
+        """Connect to a MongoDB instance (alias for %mongodb).
 
         Usage:
             %mongo_connect mongodb://localhost:27017/mydb
             %mongo_connect mongodb://localhost:27017 -d mydb
-            %mongo_connect mongodb://user:pass@host:27017/mydb
         """
-        parts = line.strip().split()
-        if not parts:
-            if self._uri:
-                print(f"Current connection: {self._uri}")
-                print(f"Database: {self._db_name or '(none)'}")
-            else:
-                print("No connection. Usage: %mongo_connect mongodb://host:27017/mydb")
-            return
-
-        uri = parts[0]
-        db_name = None
-
-        i = 1
-        while i < len(parts):
-            if parts[i] in ("-d", "--database") and i + 1 < len(parts):
-                db_name = parts[i + 1]
-                i += 2
-            else:
-                print(f"Unknown option: {parts[i]}")
-                return
-
-        self._connect(uri, db_name)
+        self.mongodb(line, cell=None)
 
     @line_magic
     def mongo_info(self, line):
         """Show current MongoDB connection info."""
         if self._client is None:
-            print("Not connected. Use %mongo_connect mongodb://host:27017/mydb")
+            print("Not connected. Use %mongodb mongodb://host:27017/mydb")
             return
 
         print(f"URI:         {self._uri}")
@@ -368,11 +342,16 @@ class MongoDBMagics(Magics):
             except Exception:
                 pass
 
-    @cell_magic
-    def mongodb(self, line, cell):
-        """Run a MongoDB query using mongosh syntax.
+    @line_cell_magic
+    def mongodb(self, line, cell=None):
+        """Connect to MongoDB or run a query.
 
-        Usage:
+        Line magic — connect or show info:
+            %mongodb mongodb://localhost:27017/mydb      Connect
+            %mongodb mongodb://host:27017 -d mydb        Connect with explicit db
+            %mongodb                                     Show connection info
+
+        Cell magic — run query using mongosh syntax:
             %%mongodb
             db.users.find({"age": {"$gt": 25}}).sort({"age": -1}).limit(5)
 
@@ -381,20 +360,20 @@ class MongoDBMagics(Magics):
         """
         line = line.strip()
 
-        # Handle inline connection string
+        # --- Line magic: %mongodb (connect or show info) ---
+        if cell is None:
+            if not line:
+                # %mongodb with no args — show connection info
+                self.mongo_info("")
+                return
+            self._parse_and_connect(line)
+            return
+
+        # --- Cell magic: %%mongodb (run query) ---
+
+        # Handle inline connection string on %%mongodb line
         if line.startswith("mongodb://") or line.startswith("mongodb+srv://"):
-            parts = line.split()
-            uri = parts[0]
-            db_name = None
-            i = 1
-            while i < len(parts):
-                if parts[i] in ("-d", "--database") and i + 1 < len(parts):
-                    db_name = parts[i + 1]
-                    i += 2
-                else:
-                    print(f"Unknown option: {parts[i]}")
-                    return
-            self._connect(uri, db_name)
+            self._parse_and_connect(line)
             if self._db is None:
                 return
         elif line:
@@ -404,7 +383,7 @@ class MongoDBMagics(Magics):
         if self._db is None:
             print(
                 "Error: No database selected.\n"
-                "Use: %mongo_connect mongodb://host:27017/mydb\n"
+                "Use: %mongodb mongodb://host:27017/mydb\n"
                 "  or: %%mongodb mongodb://host:27017/mydb"
             )
             return
@@ -426,6 +405,26 @@ class MongoDBMagics(Magics):
             self._execute(collection, collection_name, method_name, args, chain[1:])
         except Exception as e:
             print(f"MongoDB error: {e}")
+
+    def _parse_and_connect(self, line):
+        """Parse connection string with optional -d flag and connect."""
+        parts = line.strip().split()
+        if not parts:
+            return
+
+        uri = parts[0]
+        db_name = None
+
+        i = 1
+        while i < len(parts):
+            if parts[i] in ("-d", "--database") and i + 1 < len(parts):
+                db_name = parts[i + 1]
+                i += 2
+            else:
+                print(f"Unknown option: {parts[i]}")
+                return
+
+        self._connect(uri, db_name)
 
     def _execute(self, collection, col_name, method, args, chain):
         """Execute a MongoDB method with optional cursor chain."""
@@ -574,7 +573,7 @@ def load_ipython_extension(ipython):
     Usage: %load_ext cellspell.mongodb
     """
     ipython.register_magics(MongoDBMagics)
-    print("✓ mongodb spell loaded — %mongo_connect, %mongo_info, %%mongodb")
+    print("✓ mongodb spell loaded — %mongodb, %%mongodb")
 
 
 def unload_ipython_extension(ipython):
