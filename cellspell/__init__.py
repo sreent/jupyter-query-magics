@@ -2,9 +2,9 @@
 
 Available spells:
     %%xpath    — XPath queries via xmllint
-    %%cypher   — Cypher queries via Neo4j / KùzuDB  (planned)
-    %%sparql   — SPARQL queries via RDFLib           (planned)
-    %%mongodb  — MongoDB queries via PyMongo          (planned)
+    %%cypher   — Cypher queries via Neo4j
+    %%sparql   — SPARQL queries via RDFLib / remote endpoints
+    %%mongodb  — MongoDB queries via PyMongo
     %%gql      — ISO GQL queries                      (planned)
 
 Usage:
@@ -21,16 +21,51 @@ def load_ipython_extension(ipython):
     Usage in Jupyter:
         %load_ext cellspell
     """
-    from .spells.xpath import load_ipython_extension as load_xpath
+    loaded = []
 
-    load_xpath(ipython)
+    # XPath — requires xmllint (system tool, no pip dependency)
+    try:
+        from .spells.xpath import load_ipython_extension as load_xpath
 
-    # Future spells — uncomment as they become available:
-    # from .spells.cypher import load_ipython_extension as load_cypher
-    # from .spells.sparql import load_ipython_extension as load_sparql
-    # from .spells.mongodb import load_ipython_extension as load_mongodb
+        load_xpath(ipython)
+        loaded.append("xpath")
+    except Exception:
+        pass
 
-    print(f"🔮 cellspell v{__version__} — spellbook loaded")
+    # Cypher — requires neo4j pip package
+    try:
+        from .spells.cypher import load_ipython_extension as load_cypher
+
+        load_cypher(ipython)
+        loaded.append("cypher")
+    except Exception:
+        pass
+
+    # SPARQL — rdflib optional (remote endpoints work without it)
+    try:
+        from .spells.sparql import load_ipython_extension as load_sparql
+
+        load_sparql(ipython)
+        loaded.append("sparql")
+    except Exception:
+        pass
+
+    # MongoDB — requires pymongo pip package
+    try:
+        from .spells.mongodb import load_ipython_extension as load_mongodb
+
+        load_mongodb(ipython)
+        loaded.append("mongodb")
+    except Exception:
+        pass
+
+    if loaded:
+        print(f"🔮 cellspell v{__version__} — loaded: {', '.join(loaded)}")
+    else:
+        print(
+            f"🔮 cellspell v{__version__} — no spells loaded.\n"
+            "Install backends: pip install cellspell[all]"
+        )
 
 
 def unload_ipython_extension(ipython):

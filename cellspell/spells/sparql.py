@@ -1,25 +1,352 @@
-"""cellspell.spells.sparql — SPARQL cell magic (planned).
+"""cellspell.spells.sparql — SPARQL cell magic powered by RDFLib and HTTP.
 
-Will support:
-    %%sparql                                   Query default graph
-    %%sparql https://dbpedia.org/sparql        Query remote endpoint
-    %%sparql --local                           Query local RDFLib graph
+Usage:
+    %load_ext cellspell.sparql    # Load only this spell
+    %load_ext cellspell           # Or load all spells
 
-Backends:
-    - RDFLib (local in-memory)
-    - Oxigraph (local embedded)
-    - Remote SPARQL endpoints
+Commands:
+    %sparql_load data.ttl                     Load local TTL/RDF file
+    %sparql_load data.ttl --format turtle     Specify RDF format explicitly
+    %sparql_info                              Show loaded graph info
+
+    %%sparql                                  Query loaded local graph
+    %%sparql https://query.wikidata.org/sparql  Query remote endpoint
+    %%sparql --endpoint https://...           Same, with flag
 """
 
-# TODO: Implement SPARQL spell
+import json
+import urllib.error
+import urllib.parse
+import urllib.request
+
+from IPython.core.magic import Magics, cell_magic, line_magic, magics_class
+
+
+def _check_rdflib():
+    """Check if rdflib is available (needed only for local graphs)."""
+    try:
+        import rdflib  # noqa: F401
+
+        return rdflib
+    except ImportError:
+        raise RuntimeError(
+            "rdflib not found. Install it with:\n"
+            "  pip install rdflib\n"
+            "  pip install cellspell[sparql]"
+        )
+
+
+def _guess_rdf_format(filename):
+    """Guess the RDF serialization format from file extension."""
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    return {
+        "ttl": "turtle",
+        "turtle": "turtle",
+        "n3": "n3",
+        "nt": "nt",
+        "ntriples": "nt",
+        "rdf": "xml",
+        "xml": "xml",
+        "owl": "xml",
+        "jsonld": "json-ld",
+        "json": "json-ld",
+        "trig": "trig",
+        "nq": "nquads",
+    }.get(ext, "turtle")
+
+
+def _format_sparql_results(results):
+    """Format rdflib SPARQL SELECT results as a text table."""
+    rows = list(results)
+    if not rows:
+        return "(no results)"
+
+    keys = [str(v) for v in results.vars]
+    str_rows = []
+    for row in rows:
+        str_rows.append([str(val) if val is not None else "" for val in row])
+
+    col_widths = [len(k) for k in keys]
+    for row in str_rows:
+        for i, val in enumerate(row):
+            col_widths[i] = max(col_widths[i], len(val))
+
+    header = " | ".join(k.ljust(col_widths[i]) for i, k in enumerate(keys))
+    separator = "-+-".join("-" * w for w in col_widths)
+
+    lines = [header, separator]
+    for row in str_rows:
+        lines.append(" | ".join(val.ljust(col_widths[i]) for i, val in enumerate(row)))
+
+    lines.append(f"\n({len(str_rows)} row{'s' if len(str_rows) != 1 else ''})")
+    return "\n".join(lines)
+
+
+def _query_remote_endpoint(endpoint, query):
+    """Send a SPARQL query to a remote HTTP endpoint and return formatted results."""
+    data = urllib.parse.urlencode({"query": query}).encode("utf-8")
+    headers = {
+        "Accept": "application/sparql-results+json, application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "cellspell/0.1 (Jupyter SPARQL magic)",
+    }
+
+    req = urllib.request.Request(endpoint, data=data, headers=headers)
+
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            body = resp.read().decode("utf-8")
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode("utf-8", errors="replace")[:500]
+        raise RuntimeError(f"HTTP {e.code} from endpoint:\n{error_body}")
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Cannot reach endpoint: {e.reason}")
+
+    result = json.loads(body)
+
+    if "results" in result and "bindings" in result["results"]:
+        return _format_json_sparql_results(result)
+    elif "boolean" in result:
+        return f"Result: {result['boolean']}"
+    else:
+        return body
+
+
+def _format_json_sparql_results(result):
+    """Format JSON SPARQL results (application/sparql-results+json) as a text table."""
+    keys = result["head"]["vars"]
+    bindings = result["results"]["bindings"]
+
+    if not bindings:
+        return "(no results)"
+
+    str_rows = []
+    for binding in bindings:
+        row = []
+        for k in keys:
+            if k in binding:
+                row.append(binding[k].get("value", ""))
+            else:
+                row.append("")
+        str_rows.append(row)
+
+    col_widths = [len(k) for k in keys]
+    for row in str_rows:
+        for i, val in enumerate(row):
+            col_widths[i] = max(col_widths[i], len(val))
+
+    header = " | ".join(k.ljust(col_widths[i]) for i, k in enumerate(keys))
+    separator = "-+-".join("-" * w for w in col_widths)
+
+    lines = [header, separator]
+    for row in str_rows:
+        lines.append(" | ".join(val.ljust(col_widths[i]) for i, val in enumerate(row)))
+
+    lines.append(f"\n({len(str_rows)} row{'s' if len(str_rows) != 1 else ''})")
+    return "\n".join(lines)
+
+
+@magics_class
+class SPARQLMagics(Magics):
+    """Jupyter magics for running SPARQL queries."""
+
+    _graph = None
+    _default_endpoint = None
+    _loaded_files = []
+
+    @line_magic
+    def sparql_load(self, line):
+        """Load an RDF file into the local in-memory graph.
+
+        Usage:
+            %sparql_load data.ttl
+            %sparql_load data.rdf --format xml
+            %sparql_load more.ttl              (additive — merges into graph)
+        """
+        rdflib = _check_rdflib()
+
+        parts = line.strip().split()
+        if not parts:
+            if self._loaded_files:
+                print(f"Loaded files: {', '.join(self._loaded_files)}")
+                print(f"Triples: {len(self._graph)}")
+            else:
+                print("No files loaded. Usage: %sparql_load data.ttl")
+            return
+
+        filepath = None
+        rdf_format = None
+
+        i = 0
+        while i < len(parts):
+            if parts[i] == "--format" and i + 1 < len(parts):
+                rdf_format = parts[i + 1]
+                i += 2
+            elif not parts[i].startswith("--"):
+                filepath = parts[i]
+                i += 1
+            else:
+                print(f"Unknown option: {parts[i]}")
+                return
+
+        if filepath is None:
+            print("Usage: %sparql_load data.ttl [--format turtle]")
+            return
+
+        from pathlib import Path
+
+        if not Path(filepath).exists():
+            print(f"Error: File not found: {filepath}")
+            return
+
+        if rdf_format is None:
+            rdf_format = _guess_rdf_format(filepath)
+
+        if self._graph is None:
+            self._graph = rdflib.Graph()
+
+        try:
+            before = len(self._graph)
+            self._graph.parse(filepath, format=rdf_format)
+            added = len(self._graph) - before
+            self._loaded_files.append(filepath)
+            print(f"✓ Loaded: {filepath} (+{added} triples, {len(self._graph)} total)")
+        except Exception as e:
+            print(f"Error loading {filepath}: {e}")
+
+    @line_magic
+    def sparql_endpoint(self, line):
+        """Set a default remote SPARQL endpoint.
+
+        Usage:
+            %sparql_endpoint https://query.wikidata.org/sparql
+        """
+        endpoint = line.strip()
+        if not endpoint:
+            if self._default_endpoint:
+                print(f"Current endpoint: {self._default_endpoint}")
+            else:
+                print("No default endpoint. Usage: %sparql_endpoint <url>")
+            return
+
+        self._default_endpoint = endpoint
+        print(f"✓ Default endpoint: {endpoint}")
+
+    @line_magic
+    def sparql_info(self, line):
+        """Show current SPARQL settings."""
+        print(f"Default endpoint: {self._default_endpoint or '(none)'}")
+        if self._graph is not None:
+            print(f"Local graph:      {len(self._graph)} triples")
+            if self._loaded_files:
+                print(f"Loaded files:     {', '.join(self._loaded_files)}")
+        else:
+            print("Local graph:      (empty)")
+
+    @cell_magic
+    def sparql(self, line, cell):
+        """Run a SPARQL query against a local graph or remote endpoint.
+
+        Usage:
+            %%sparql                                   Query local graph
+            %%sparql https://query.wikidata.org/sparql Query remote endpoint
+            %%sparql --endpoint https://...            Same, with flag
+            %%sparql --local                           Force local graph
+        """
+        parts = line.strip().split()
+        endpoint = None
+        force_local = False
+
+        i = 0
+        while i < len(parts):
+            if parts[i] in ("--endpoint", "-e") and i + 1 < len(parts):
+                endpoint = parts[i + 1]
+                i += 2
+            elif parts[i] == "--local":
+                force_local = True
+                i += 1
+            elif not parts[i].startswith("--"):
+                endpoint = parts[i]
+                i += 1
+            else:
+                print(f"Unknown option: {parts[i]}")
+                return
+
+        query = cell.strip()
+        if not query:
+            print("Error: No SPARQL query provided.")
+            return
+
+        # Decide: remote endpoint or local graph
+        if force_local:
+            self._query_local(query)
+        elif endpoint:
+            self._query_remote(endpoint, query)
+        elif self._default_endpoint:
+            self._query_remote(self._default_endpoint, query)
+        elif self._graph is not None:
+            self._query_local(query)
+        else:
+            print(
+                "Error: No graph or endpoint available.\n"
+                "Use: %sparql_load data.ttl       (local file)\n"
+                "  or: %sparql_endpoint <url>      (remote endpoint)\n"
+                "  or: %%sparql <endpoint-url>     (inline endpoint)"
+            )
+
+    def _query_local(self, query):
+        """Execute SPARQL against the local rdflib graph."""
+        _check_rdflib()
+
+        if self._graph is None or len(self._graph) == 0:
+            print("Error: No local graph loaded. Use %sparql_load data.ttl")
+            return
+
+        try:
+            results = self._graph.query(query)
+        except Exception as e:
+            print(f"SPARQL error: {e}")
+            return
+
+        if hasattr(results, "vars") and results.vars:
+            # SELECT query
+            print(_format_sparql_results(results))
+        elif hasattr(results, "graph"):
+            # CONSTRUCT / DESCRIBE query
+            output = results.graph.serialize(format="turtle")
+            if not output.strip():
+                print("(no results)")
+            else:
+                print(output)
+        elif hasattr(results, "askAnswer"):
+            print(f"Result: {results.askAnswer}")
+        else:
+            for row in results:
+                print(row)
+
+    def _query_remote(self, endpoint, query):
+        """Execute SPARQL against a remote HTTP endpoint."""
+        try:
+            output = _query_remote_endpoint(endpoint, query)
+            print(output)
+        except RuntimeError as e:
+            print(f"SPARQL error: {e}")
+        except Exception as e:
+            print(f"SPARQL error: {e}")
 
 
 def load_ipython_extension(ipython):
-    raise NotImplementedError(
-        "SPARQL spell is not yet implemented. Coming soon!\n"
-        "Track progress at: https://github.com/yourusername/cellspell"
+    """Load the SPARQL spell.
+
+    Usage: %load_ext cellspell.sparql
+    """
+    ipython.register_magics(SPARQLMagics)
+    print(
+        "✓ sparql spell loaded — "
+        "%sparql_load, %sparql_endpoint, %sparql_info, %%sparql"
     )
 
 
 def unload_ipython_extension(ipython):
+    """Unload the SPARQL spell."""
     pass
