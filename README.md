@@ -277,12 +277,6 @@ db.users.aggregate([
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sreent/jupyter-query-magics/blob/main/examples/colab_mongodb.ipynb)
 
----
-
-### 🔜 `%%gql` — ISO GQL queries (planned)
-
-Support for the ISO GQL (Graph Query Language) standard is planned.
-
 ## Output Variables
 
 Each spell stores the last query result in a Python variable for further processing:
@@ -329,8 +323,7 @@ cellspell/
     ├── xpath.py             # XPath magic (xmllint)
     ├── cypher.py            # Cypher magic (neo4j driver)
     ├── sparql.py            # SPARQL magic (rdflib + HTTP)
-    ├── mongodb.py           # MongoDB magic (pymongo)
-    └── gql.py               # GQL magic (planned)
+    └── mongodb.py           # MongoDB magic (pymongo)
 
 tests/
 ├── test_mongodb_parser.py   # Mongosh syntax parser tests
