@@ -189,7 +189,7 @@ SELECT ?planet ?planetLabel WHERE {
 
 ### ✅ `%%mongodb` — MongoDB queries via PyMongo
 
-Run MongoDB queries directly in notebook cells.
+Run MongoDB queries directly in notebook cells using mongosh syntax.
 
 **Prerequisites:** `pip install cellspell[mongodb]` and a running MongoDB instance
 
@@ -198,12 +198,11 @@ Run MongoDB queries directly in notebook cells.
 ```
 
 ```python
-%%mongodb users
-{"age": {"$gt": 25}}
+%%mongodb
+db.users.find({"age": {"$gt": 25}}).sort({"age": -1}).limit(5)
 ```
 ```json
 {
-  "_id": "...",
   "name": "Alice",
   "age": 30,
   "city": "Bangkok"
@@ -213,28 +212,53 @@ Run MongoDB queries directly in notebook cells.
 ```
 
 ```python
-%%mongodb users --op aggregate
-[
+%%mongodb
+db.users.aggregate([
     {"$group": {"_id": "$city", "count": {"$sum": 1}}},
     {"$sort": {"count": -1}}
-]
+])
+```
+
+```python
+%%mongodb
+db.users.countDocuments({"active": true})
+```
+
+Inline connection (connect and query in one cell):
+
+```python
+%%mongodb mongodb://localhost:27017/mydb
+db.users.find({})
 ```
 
 **All MongoDB commands:**
 
 | Command | Description |
 |---------|-------------|
-| `%mongo_connect mongodb://host:27017/db` | Connect to database |
+| `%mongo_connect mongodb://host:27017/mydb` | Connect to database |
 | `%mongo_connect <uri> -d mydb` | Connect with explicit database |
 | `%mongo_info` | Show connection, server, and collections |
-| `%%mongodb <collection>` | Find documents (default op) |
-| `%%mongodb <col> --op aggregate` | Run aggregation pipeline |
-| `%%mongodb <col> --op count` | Count matching documents |
-| `%%mongodb <col> --op distinct --field name` | Get distinct values |
-| `%%mongodb <col> --op insert` | Insert document(s) |
-| `%%mongodb <col> --op delete` | Delete matching documents |
-| `%%mongodb <col> --limit 10` | Limit results |
-| `%%mongodb <col> --sort {"age":-1}` | Sort results |
+| `%%mongodb` | Query using stored connection |
+| `%%mongodb mongodb://host:27017/mydb` | Connect and query inline |
+
+**Supported methods:**
+
+| Method | Description |
+|--------|-------------|
+| `db.col.find(filter, projection)` | Query documents (chain `.sort()`, `.limit()`, `.skip()`) |
+| `db.col.findOne(filter, projection)` | Return single document |
+| `db.col.aggregate(pipeline)` | Run aggregation pipeline |
+| `db.col.countDocuments(filter)` | Count matching documents |
+| `db.col.estimatedDocumentCount()` | Fast estimated count |
+| `db.col.distinct(field, filter)` | Get distinct values |
+| `db.col.insertOne(doc)` | Insert one document |
+| `db.col.insertMany([docs])` | Insert multiple documents |
+| `db.col.updateOne(filter, update)` | Update first match |
+| `db.col.updateMany(filter, update)` | Update all matches |
+| `db.col.replaceOne(filter, doc)` | Replace first match |
+| `db.col.deleteOne(filter)` | Delete first match |
+| `db.col.deleteMany(filter)` | Delete all matches |
+| `db.col.drop()` | Drop collection |
 
 ---
 
