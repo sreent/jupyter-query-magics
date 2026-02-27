@@ -4,7 +4,12 @@ from datetime import datetime, timezone
 
 import pytest
 
-from cellspell.spells.mongodb import _parse_arg, _parse_mongosh, _split_args
+from cellspell.spells.mongodb import (
+    _parse_arg,
+    _parse_mongosh,
+    _split_args,
+    _split_statements,
+)
 
 
 # --- _split_args ---
@@ -247,6 +252,61 @@ class TestParseMongosh:
         assert col == "orders"
         assert chain[0][0] == "aggregate"
         assert chain[1][0] == "explain"
+
+
+# --- _split_statements ---
+
+
+class TestSplitStatements:
+    def test_single_statement(self):
+        assert _split_statements("db.users.find({})") == ["db.users.find({})"]
+
+    def test_two_statements_newline(self):
+        result = _split_statements("db.col.drop()\ndb.col.insertOne({})")
+        assert result == ["db.col.drop()", "db.col.insertOne({})"]
+
+    def test_two_statements_semicolon(self):
+        result = _split_statements("db.col.drop(); db.col.insertOne({})")
+        assert result == ["db.col.drop()", "db.col.insertOne({})"]
+
+    def test_multiline_single_statement(self):
+        query = """db.people.insertMany([
+          {"_id": 1, "name": "Tom"},
+          {"_id": 2, "name": "Jane"}
+        ])"""
+        result = _split_statements(query)
+        assert len(result) == 1
+        assert result[0].startswith("db.people.insertMany(")
+
+    def test_drop_then_insertMany_multiline(self):
+        query = """db.people.drop()
+db.people.insertMany([
+  {"_id": 1, "name": "Tom"},
+  {"_id": 2, "name": "Jane"}
+])"""
+        result = _split_statements(query)
+        assert len(result) == 2
+        assert result[0] == "db.people.drop()"
+        assert result[1].startswith("db.people.insertMany(")
+
+    def test_trailing_semicolons(self):
+        result = _split_statements("db.col.drop();\ndb.col.find();")
+        assert result == ["db.col.drop()", "db.col.find()"]
+
+    def test_empty_input(self):
+        assert _split_statements("") == []
+        assert _split_statements("   ") == []
+
+    def test_three_statements(self):
+        query = "db.a.drop()\ndb.a.insertOne({})\ndb.a.find({})"
+        result = _split_statements(query)
+        assert len(result) == 3
+
+    def test_statement_with_dates(self):
+        query = '''db.col.drop()
+db.col.insertMany([{"d": new Date("2012-05-19")}])'''
+        result = _split_statements(query)
+        assert len(result) == 2
 
 
 # --- Mongosh JS constructor support (new Date, ObjectId, etc.) ---
