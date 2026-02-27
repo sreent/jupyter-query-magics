@@ -232,6 +232,72 @@ def _parse_arg(arg_str):
     raise ValueError(f"Cannot parse argument: {arg_str}")
 
 
+def _split_statements(text):
+    """Split a cell containing multiple mongosh statements.
+
+    Statements are delimited by semicolons or newlines at the top level
+    (i.e. outside parentheses, brackets, braces, and strings).  Returns
+    a list of non-empty statement strings.
+    """
+    text = text.strip()
+    statements = []
+    i = 0
+    n = len(text)
+
+    while i < n:
+        # Skip whitespace and semicolons between statements
+        while i < n and text[i] in " \t\n\r;":
+            i += 1
+        if i >= n:
+            break
+
+        # Consume one statement: scan until all opened parens are closed.
+        start = i
+        depth = 0
+        in_string = False
+        string_char = None
+        escape = False
+        found_paren = False
+
+        while i < n:
+            ch = text[i]
+            if escape:
+                escape = False
+                i += 1
+                continue
+            if ch == "\\":
+                escape = True
+                i += 1
+                continue
+            if ch in ('"', "'"):
+                if not in_string:
+                    in_string = True
+                    string_char = ch
+                elif ch == string_char:
+                    in_string = False
+                i += 1
+                continue
+            if in_string:
+                i += 1
+                continue
+            if ch in ("(", "[", "{"):
+                depth += 1
+                if ch == "(":
+                    found_paren = True
+            elif ch in (")", "]", "}"):
+                depth -= 1
+                if depth == 0 and found_paren and ch == ")":
+                    i += 1
+                    break
+            i += 1
+
+        stmt = text[start:i].strip().rstrip(";").strip()
+        if stmt:
+            statements.append(stmt)
+
+    return statements
+
+
 def _parse_mongosh(text):
     """Parse mongo shell syntax: db.collection.method(args).chain(args)
 
@@ -433,24 +499,31 @@ class MongoDBMagics(Magics):
             print("Error: No query provided.")
             return
 
-        try:
-            collection_name, chain = _parse_mongosh(query)
-        except ValueError as e:
-            print(f"Parse error: {e}")
+        statements = _split_statements(query)
+        if not statements:
+            print("Error: No query provided.")
             return
 
-        try:
-            method_name, args = chain[0]
-
-            # db-level methods (no collection)
-            if collection_name is None:
-                self._execute_db(method_name, args)
+        for stmt in statements:
+            try:
+                collection_name, chain = _parse_mongosh(stmt)
+            except ValueError as e:
+                print(f"Parse error: {e}")
                 return
 
-            collection = self._db[collection_name]
-            self._execute(collection, collection_name, method_name, args, chain[1:])
-        except Exception as e:
-            print(f"MongoDB error: {e}")
+            try:
+                method_name, args = chain[0]
+
+                # db-level methods (no collection)
+                if collection_name is None:
+                    self._execute_db(method_name, args)
+                    continue
+
+                collection = self._db[collection_name]
+                self._execute(collection, collection_name, method_name, args, chain[1:])
+            except Exception as e:
+                print(f"MongoDB error: {e}")
+                return
 
     def _show_info(self):
         """Show current MongoDB connection info."""
