@@ -11,8 +11,76 @@ Commands:
 """
 
 import json
+import re
+from datetime import datetime, timezone
 
 from IPython.core.magic import Magics, line_cell_magic, magics_class
+
+
+# ---------------------------------------------------------------------------
+# Mongosh JavaScript constructor preprocessing
+# ---------------------------------------------------------------------------
+# Sentinel prefix used in placeholder strings so they survive JSON parsing
+# and can be resolved to Python types afterward.
+_MONGOSH_SENTINEL = "__mongosh_type__"
+
+_RE_DATE_STRING = re.compile(
+    r"""(?:new\s+Date|ISODate)\s*\(\s*["']([^"']*)["']\s*\)"""
+)
+_RE_DATE_NUMBER = re.compile(r"""new\s+Date\s*\(\s*(\d+)\s*\)""")
+_RE_DATE_NOW = re.compile(r"""new\s+Date\s*\(\s*\)""")
+_RE_OBJECTID = re.compile(
+    r"""(?:new\s+)?ObjectId\s*\(\s*["']([0-9a-fA-F]{24})["']\s*\)"""
+)
+
+
+def _preprocess_mongosh_extensions(text):
+    """Replace mongosh JS constructors with JSON-compatible placeholder strings.
+
+    Handles:
+        new Date("..."), ISODate("..."), new Date(), new Date(millis),
+        ObjectId("..."), new ObjectId("...").
+    """
+    text = _RE_DATE_STRING.sub(
+        lambda m: json.dumps(f"{_MONGOSH_SENTINEL}date:{m.group(1)}"), text
+    )
+    text = _RE_DATE_NUMBER.sub(
+        lambda m: json.dumps(f"{_MONGOSH_SENTINEL}date_ms:{m.group(1)}"), text
+    )
+    text = _RE_DATE_NOW.sub(json.dumps(f"{_MONGOSH_SENTINEL}date_now"), text)
+    text = _RE_OBJECTID.sub(
+        lambda m: json.dumps(f"{_MONGOSH_SENTINEL}oid:{m.group(1)}"), text
+    )
+    return text
+
+
+def _resolve_mongosh_types(obj):
+    """Recursively resolve mongosh type placeholders to Python/BSON types."""
+    if isinstance(obj, str) and obj.startswith(_MONGOSH_SENTINEL):
+        tag = obj[len(_MONGOSH_SENTINEL) :]
+        if tag.startswith("date:"):
+            date_str = tag[5:]
+            if date_str.endswith("Z"):
+                date_str = date_str[:-1] + "+00:00"
+            return datetime.fromisoformat(date_str)
+        elif tag == "date_now":
+            return datetime.now(timezone.utc)
+        elif tag.startswith("date_ms:"):
+            ms = int(tag[8:])
+            return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
+        elif tag.startswith("oid:"):
+            oid_hex = tag[4:]
+            try:
+                from bson import ObjectId
+
+                return ObjectId(oid_hex)
+            except ImportError:
+                return oid_hex
+    elif isinstance(obj, dict):
+        return {k: _resolve_mongosh_types(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_resolve_mongosh_types(item) for item in obj]
+    return obj
 
 
 def _check_pymongo():
@@ -122,21 +190,28 @@ def _split_args(args_str):
 
 
 def _parse_arg(arg_str):
-    """Parse a single argument: JSON object/array, string, number, or boolean."""
+    """Parse a single argument: JSON object/array, string, number, or boolean.
+
+    Also handles mongosh JavaScript constructors such as ``new Date("...")``,
+    ``ISODate("...")``, ``ObjectId("...")``, and ``new ObjectId("...")``.
+    """
     arg_str = arg_str.strip()
     if not arg_str:
         return None
 
+    # Preprocess mongosh extensions (new Date, ObjectId, etc.)
+    preprocessed = _preprocess_mongosh_extensions(arg_str)
+
     # Try JSON first (handles objects, arrays, strings, numbers, booleans, null)
     try:
-        return json.loads(arg_str)
+        return _resolve_mongosh_types(json.loads(preprocessed))
     except json.JSONDecodeError:
         pass
 
     # Try with single quotes replaced (basic mongosh compatibility)
-    if "'" in arg_str:
+    if "'" in preprocessed:
         try:
-            return json.loads(arg_str.replace("'", '"'))
+            return _resolve_mongosh_types(json.loads(preprocessed.replace("'", '"')))
         except json.JSONDecodeError:
             pass
 

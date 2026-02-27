@@ -1,5 +1,7 @@
 """Tests for the mongosh syntax parser."""
 
+from datetime import datetime, timezone
+
 import pytest
 
 from cellspell.spells.mongodb import _parse_arg, _parse_mongosh, _split_args
@@ -245,3 +247,88 @@ class TestParseMongosh:
         assert col == "orders"
         assert chain[0][0] == "aggregate"
         assert chain[1][0] == "explain"
+
+
+# --- Mongosh JS constructor support (new Date, ObjectId, etc.) ---
+
+
+class TestParseArgMongoshTypes:
+    def test_new_date_string(self):
+        result = _parse_arg('new Date("2012-05-19")')
+        assert result == datetime(2012, 5, 19)
+
+    def test_new_date_iso(self):
+        result = _parse_arg('new Date("2024-01-15T10:30:00")')
+        assert result == datetime(2024, 1, 15, 10, 30, 0)
+
+    def test_new_date_iso_z(self):
+        result = _parse_arg('new Date("2024-01-15T10:30:00Z")')
+        assert result == datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+
+    def test_isodate(self):
+        result = _parse_arg('ISODate("2023-06-01")')
+        assert result == datetime(2023, 6, 1)
+
+    def test_new_date_epoch_millis(self):
+        result = _parse_arg("new Date(0)")
+        assert result == datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+    def test_new_date_no_args(self):
+        result = _parse_arg("new Date()")
+        assert isinstance(result, datetime)
+
+    def test_new_date_single_quotes(self):
+        result = _parse_arg("new Date('2012-11-01')")
+        assert result == datetime(2012, 11, 1)
+
+    def test_object_with_date(self):
+        result = _parse_arg('{"date_founded": new Date("2012-05-19")}')
+        assert result == {"date_founded": datetime(2012, 5, 19)}
+
+    def test_array_with_dates(self):
+        result = _parse_arg(
+            '[{"d": new Date("2012-05-19")}, {"d": new Date("2019-03-15")}]'
+        )
+        assert result == [
+            {"d": datetime(2012, 5, 19)},
+            {"d": datetime(2019, 3, 15)},
+        ]
+
+
+class TestParseMongoshWithDates:
+    def test_insertOne_with_date(self):
+        col, chain = _parse_mongosh(
+            'db.events.insertOne({"name": "launch", "date": new Date("2024-01-01")})'
+        )
+        assert col == "events"
+        assert chain[0][0] == "insertOne"
+        doc = chain[0][1][0]
+        assert doc["date"] == datetime(2024, 1, 1)
+
+    def test_insertMany_with_dates(self):
+        query = """db.people.insertMany([
+          {"_id": 1, "businesses": [{"name": "Acme", "date_founded": new Date("2012-05-19")}]},
+          {"_id": 2, "businesses": [{"name": "Corp", "date_founded": new Date("2019-03-15")}]}
+        ])"""
+        col, chain = _parse_mongosh(query)
+        assert col == "people"
+        assert chain[0][0] == "insertMany"
+        docs = chain[0][1][0]
+        assert docs[0]["businesses"][0]["date_founded"] == datetime(2012, 5, 19)
+        assert docs[1]["businesses"][0]["date_founded"] == datetime(2019, 3, 15)
+
+    def test_find_with_date_filter(self):
+        col, chain = _parse_mongosh(
+            'db.events.find({"date": {"$gte": new Date("2024-01-01")}})'
+        )
+        assert col == "events"
+        assert chain[0][1][0]["date"]["$gte"] == datetime(2024, 1, 1)
+
+    def test_isodate_in_query(self):
+        col, chain = _parse_mongosh(
+            'db.logs.find({"ts": ISODate("2023-06-01T00:00:00Z")})'
+        )
+        assert col == "logs"
+        assert chain[0][1][0]["ts"] == datetime(
+            2023, 6, 1, 0, 0, 0, tzinfo=timezone.utc
+        )
