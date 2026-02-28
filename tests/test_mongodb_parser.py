@@ -437,6 +437,35 @@ class TestJsToJson:
         result = _js_to_json("""{'say': 'he said "hi"'}""")
         assert result == '{"say": "he said \\"hi\\""}'
 
+    def test_single_line_comment(self):
+        result = _js_to_json('{ likes: "fashun" } // find docs')
+        import json
+
+        assert json.loads(result) == {"likes": "fashun"}
+
+    def test_block_comment(self):
+        result = _js_to_json("{ /* filter */ likes: /* field */ \"fashun\" }")
+        import json
+
+        assert json.loads(result) == {"likes": "fashun"}
+
+    def test_multiline_with_comments(self):
+        text = """\
+{ likes: "fashun" },           // first arg
+{ $set: { "likes.$": "fashion" } }  // second arg"""
+        result = _js_to_json(text)
+        # Comments stripped, content preserved
+        assert "// first arg" not in result
+        assert "// second arg" not in result
+        assert '"likes"' in result
+        assert '"$set"' in result
+
+    def test_comment_inside_string_not_stripped(self):
+        result = _js_to_json('{ msg: "hello // world" }')
+        import json
+
+        assert json.loads(result) == {"msg": "hello // world"}
+
 
 # --- Unquoted mongosh syntax (end-to-end) ---
 
@@ -501,3 +530,29 @@ class TestUnquotedMongoshSyntax:
         assert col == "users"
         assert chain[0][0] == "insertOne"
         assert chain[0][1] == [{"name": "Bob", "age": 25, "active": True}]
+
+    def test_updateMany_with_comments_and_positional_operator(self):
+        query = """db.people.updateMany(
+            { likes: "fashun" },           // Find documents with "fashun" in likes
+            { $set: { "likes.$": "fashion" } }  // Replace the matched element
+        )"""
+        col, chain = _parse_mongosh(query)
+        assert col == "people"
+        assert chain[0][0] == "updateMany"
+        assert chain[0][1] == [
+            {"likes": "fashun"},
+            {"$set": {"likes.$": "fashion"}},
+        ]
+
+    def test_updateMany_with_block_comments(self):
+        query = """db.people.updateMany(
+            { /* filter */ likes: "fashun" },
+            { $set: { "likes.$": "fashion" } }
+        )"""
+        col, chain = _parse_mongosh(query)
+        assert col == "people"
+        assert chain[0][0] == "updateMany"
+        assert chain[0][1] == [
+            {"likes": "fashun"},
+            {"$set": {"likes.$": "fashion"}},
+        ]

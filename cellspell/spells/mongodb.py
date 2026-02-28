@@ -90,7 +90,7 @@ def _js_to_json(text):
     (e.g. ``{name: "Alice"}`` becomes ``{"name": "Alice"}``).  Also
     converts single-quoted strings to double-quoted strings so that
     expressions like ``{'name': 'Alice'}`` and ``{name: 'Alice'}`` are
-    accepted.
+    accepted.  JavaScript comments (``//`` and ``/* */``) are stripped.
     """
     out = []
     i = 0
@@ -98,6 +98,22 @@ def _js_to_json(text):
 
     while i < n:
         ch = text[i]
+
+        # --- single-line comment: skip to end of line ---
+        if ch == '/' and i + 1 < n and text[i + 1] == '/':
+            i += 2
+            while i < n and text[i] != '\n':
+                i += 1
+            continue
+
+        # --- block comment: skip to closing */ ---
+        if ch == '/' and i + 1 < n and text[i + 1] == '*':
+            i += 2
+            while i < n and not (text[i] == '*' and i + 1 < n and text[i + 1] == '/'):
+                i += 1
+            if i < n:
+                i += 2  # skip */
+            continue
 
         # --- double-quoted string: pass through unchanged ---
         if ch == '"':
