@@ -1,5 +1,6 @@
 """Tests for the mongosh syntax parser."""
 
+import re
 from datetime import datetime, timezone
 
 import pytest
@@ -395,6 +396,102 @@ class TestParseMongoshWithDates:
         )
 
 
+# --- Regex support ---
+
+
+class TestParseArgRegex:
+    def test_regexp_constructor(self):
+        result = _parse_arg('RegExp("^hello")')
+        assert result.pattern == "^hello"
+        assert result.flags & re.IGNORECASE == 0
+
+    def test_regexp_constructor_with_flags(self):
+        result = _parse_arg('RegExp("^hello", "i")')
+        assert result.pattern == "^hello"
+        assert result.flags & re.IGNORECASE
+
+    def test_new_regexp_constructor(self):
+        result = _parse_arg('new RegExp("^hello", "im")')
+        assert result.pattern == "^hello"
+        assert result.flags & re.IGNORECASE
+        assert result.flags & re.MULTILINE
+
+    def test_regexp_single_quotes(self):
+        result = _parse_arg("RegExp('^hello', 'i')")
+        assert result.pattern == "^hello"
+        assert result.flags & re.IGNORECASE
+
+    def test_object_with_regexp(self):
+        result = _parse_arg('{"name": RegExp("^Al", "i")}')
+        assert result["name"].pattern == "^Al"
+        assert result["name"].flags & re.IGNORECASE
+
+    def test_regex_literal(self):
+        result = _parse_arg("{name: /^Al/i}")
+        assert result["name"].pattern == "^Al"
+        assert result["name"].flags & re.IGNORECASE
+
+    def test_regex_literal_no_flags(self):
+        result = _parse_arg("{name: /^Al/}")
+        assert result["name"].pattern == "^Al"
+        assert result["name"].flags & re.IGNORECASE == 0
+
+    def test_regex_literal_multiple_flags(self):
+        result = _parse_arg("{name: /^Al/im}")
+        assert result["name"].pattern == "^Al"
+        assert result["name"].flags & re.IGNORECASE
+        assert result["name"].flags & re.MULTILINE
+
+    def test_regex_with_escaped_slash(self):
+        result = _parse_arg(r"{path: /^\/api\/users/}")
+        assert result["path"].pattern == "^/api/users"
+
+    def test_regex_in_array(self):
+        result = _parse_arg('{"$in": [/^Al/i, /^Bo/]}')
+        assert len(result["$in"]) == 2
+        assert result["$in"][0].pattern == "^Al"
+        assert result["$in"][1].pattern == "^Bo"
+
+
+class TestParseMongoshWithRegex:
+    def test_find_with_regex_literal(self):
+        col, chain = _parse_mongosh("db.users.find({name: /^Al/i})")
+        assert col == "users"
+        assert chain[0][1][0]["name"].pattern == "^Al"
+        assert chain[0][1][0]["name"].flags & re.IGNORECASE
+
+    def test_find_with_regexp_constructor(self):
+        col, chain = _parse_mongosh(
+            'db.users.find({"name": RegExp("^Al", "i")})'
+        )
+        assert col == "users"
+        assert chain[0][1][0]["name"].pattern == "^Al"
+
+    def test_find_regex_in_dollar_in(self):
+        col, chain = _parse_mongosh(
+            'db.users.find({name: {"$in": [/^Al/i, /^Bo/]}})'
+        )
+        assert col == "users"
+        patterns = chain[0][1][0]["name"]["$in"]
+        assert patterns[0].pattern == "^Al"
+        assert patterns[1].pattern == "^Bo"
+
+    def test_regex_with_comment_on_same_line(self):
+        col, chain = _parse_mongosh(
+            "db.users.find({name: /^Al/i}) // find users"
+        )
+        assert col == "users"
+        assert chain[0][1][0]["name"].pattern == "^Al"
+
+    def test_regex_does_not_break_comments(self):
+        query = """db.users.find(
+            {name: /^Al/i}  // regex filter
+        )"""
+        col, chain = _parse_mongosh(query)
+        assert col == "users"
+        assert chain[0][1][0]["name"].pattern == "^Al"
+
+
 # --- _js_to_json ---
 
 
@@ -436,6 +533,35 @@ class TestJsToJson:
     def test_double_quote_inside_single_quoted_string(self):
         result = _js_to_json("""{'say': 'he said "hi"'}""")
         assert result == '{"say": "he said \\"hi\\""}'
+
+    def test_single_line_comment(self):
+        result = _js_to_json('{ likes: "fashun" } // find docs')
+        import json
+
+        assert json.loads(result) == {"likes": "fashun"}
+
+    def test_block_comment(self):
+        result = _js_to_json("{ /* filter */ likes: /* field */ \"fashun\" }")
+        import json
+
+        assert json.loads(result) == {"likes": "fashun"}
+
+    def test_multiline_with_comments(self):
+        text = """\
+{ likes: "fashun" },           // first arg
+{ $set: { "likes.$": "fashion" } }  // second arg"""
+        result = _js_to_json(text)
+        # Comments stripped, content preserved
+        assert "// first arg" not in result
+        assert "// second arg" not in result
+        assert '"likes"' in result
+        assert '"$set"' in result
+
+    def test_comment_inside_string_not_stripped(self):
+        result = _js_to_json('{ msg: "hello // world" }')
+        import json
+
+        assert json.loads(result) == {"msg": "hello // world"}
 
 
 # --- Unquoted mongosh syntax (end-to-end) ---
@@ -501,3 +627,29 @@ class TestUnquotedMongoshSyntax:
         assert col == "users"
         assert chain[0][0] == "insertOne"
         assert chain[0][1] == [{"name": "Bob", "age": 25, "active": True}]
+
+    def test_updateMany_with_comments_and_positional_operator(self):
+        query = """db.people.updateMany(
+            { likes: "fashun" },           // Find documents with "fashun" in likes
+            { $set: { "likes.$": "fashion" } }  // Replace the matched element
+        )"""
+        col, chain = _parse_mongosh(query)
+        assert col == "people"
+        assert chain[0][0] == "updateMany"
+        assert chain[0][1] == [
+            {"likes": "fashun"},
+            {"$set": {"likes.$": "fashion"}},
+        ]
+
+    def test_updateMany_with_block_comments(self):
+        query = """db.people.updateMany(
+            { /* filter */ likes: "fashun" },
+            { $set: { "likes.$": "fashion" } }
+        )"""
+        col, chain = _parse_mongosh(query)
+        assert col == "people"
+        assert chain[0][0] == "updateMany"
+        assert chain[0][1] == [
+            {"likes": "fashun"},
+            {"$set": {"likes.$": "fashion"}},
+        ]
