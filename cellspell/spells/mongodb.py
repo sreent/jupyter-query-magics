@@ -83,6 +83,90 @@ def _resolve_mongosh_types(obj):
     return obj
 
 
+def _js_to_json(text):
+    """Convert relaxed mongosh object notation to strict JSON.
+
+    Adds double quotes around unquoted identifiers used as object keys
+    (e.g. ``{name: "Alice"}`` becomes ``{"name": "Alice"}``).  Also
+    converts single-quoted strings to double-quoted strings so that
+    expressions like ``{'name': 'Alice'}`` and ``{name: 'Alice'}`` are
+    accepted.
+    """
+    out = []
+    i = 0
+    n = len(text)
+
+    while i < n:
+        ch = text[i]
+
+        # --- double-quoted string: pass through unchanged ---
+        if ch == '"':
+            out.append(ch)
+            i += 1
+            while i < n and text[i] != '"':
+                if text[i] == '\\':
+                    out.append(text[i])
+                    i += 1
+                    if i < n:
+                        out.append(text[i])
+                        i += 1
+                else:
+                    out.append(text[i])
+                    i += 1
+            if i < n:
+                out.append(text[i])  # closing "
+                i += 1
+            continue
+
+        # --- single-quoted string: convert to double-quoted ---
+        if ch == "'":
+            out.append('"')
+            i += 1
+            while i < n and text[i] != "'":
+                if text[i] == '\\':
+                    out.append(text[i])
+                    i += 1
+                    if i < n:
+                        out.append(text[i])
+                        i += 1
+                else:
+                    if text[i] == '"':
+                        out.append('\\')
+                    out.append(text[i])
+                    i += 1
+            if i < n:
+                out.append('"')  # closing ' → "
+                i += 1
+            continue
+
+        # --- unquoted identifier: quote if it is an object key ---
+        if ch.isalpha() or ch == '_' or ch == '$':
+            start = i
+            while i < n and (text[i].isalnum() or text[i] in ('_', '$')):
+                i += 1
+            ident = text[start:i]
+
+            # peek past whitespace for ':'
+            j = i
+            while j < n and text[j] in (' ', '\t', '\n', '\r'):
+                j += 1
+
+            if j < n and text[j] == ':':
+                # object key — wrap in double quotes
+                out.append('"')
+                out.append(ident)
+                out.append('"')
+            else:
+                # value position (true, false, null, etc.) — leave as-is
+                out.append(ident)
+            continue
+
+        out.append(ch)
+        i += 1
+
+    return ''.join(out)
+
+
 def _check_pymongo():
     """Check if pymongo is available."""
     try:
@@ -214,6 +298,12 @@ def _parse_arg(arg_str):
             return _resolve_mongosh_types(json.loads(preprocessed.replace("'", '"')))
         except json.JSONDecodeError:
             pass
+
+    # Try relaxed mongosh syntax (unquoted keys / single-quoted strings)
+    try:
+        return _resolve_mongosh_types(json.loads(_js_to_json(preprocessed)))
+    except (json.JSONDecodeError, ValueError):
+        pass
 
     # Handle bare single-quoted strings
     if len(arg_str) >= 2 and arg_str[0] == "'" and arg_str[-1] == "'":

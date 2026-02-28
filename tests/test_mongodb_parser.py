@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import pytest
 
 from cellspell.spells.mongodb import (
+    _js_to_json,
     _parse_arg,
     _parse_mongosh,
     _split_args,
@@ -392,3 +393,111 @@ class TestParseMongoshWithDates:
         assert chain[0][1][0]["ts"] == datetime(
             2023, 6, 1, 0, 0, 0, tzinfo=timezone.utc
         )
+
+
+# --- _js_to_json ---
+
+
+class TestJsToJson:
+    def test_unquoted_keys(self):
+        assert _js_to_json("{name: 1}") == '{"name": 1}'
+
+    def test_unquoted_dollar_operator(self):
+        assert _js_to_json("{$lt: 20}") == '{"$lt": 20}'
+
+    def test_nested_unquoted(self):
+        result = _js_to_json("{quantity: {$lt: 20}}")
+        assert result == '{"quantity": {"$lt": 20}}'
+
+    def test_mixed_quoted_unquoted(self):
+        result = _js_to_json('{quantity: {$lt: 20}, "name": "Alice"}')
+        assert result == '{"quantity": {"$lt": 20}, "name": "Alice"}'
+
+    def test_single_quoted_strings(self):
+        result = _js_to_json("{'name': 'Alice'}")
+        assert result == '{"name": "Alice"}'
+
+    def test_already_valid_json(self):
+        text = '{"name": "Alice", "age": 30}'
+        assert _js_to_json(text) == text
+
+    def test_boolean_values_not_quoted(self):
+        result = _js_to_json("{active: true}")
+        assert result == '{"active": true}'
+
+    def test_null_value_not_quoted(self):
+        result = _js_to_json("{field: null}")
+        assert result == '{"field": null}'
+
+    def test_dollar_set_with_nested(self):
+        result = _js_to_json('{$set: {status: "low"}}')
+        assert result == '{"$set": {"status": "low"}}'
+
+    def test_double_quote_inside_single_quoted_string(self):
+        result = _js_to_json("""{'say': 'he said "hi"'}""")
+        assert result == '{"say": "he said \\"hi\\""}'
+
+
+# --- Unquoted mongosh syntax (end-to-end) ---
+
+
+class TestUnquotedMongoshSyntax:
+    def test_find_unquoted_keys(self):
+        col, chain = _parse_mongosh("db.inventory.find({quantity: {$lt: 20}})")
+        assert col == "inventory"
+        assert chain[0][0] == "find"
+        assert chain[0][1] == [{"quantity": {"$lt": 20}}]
+
+    def test_find_unquoted_with_projection(self):
+        col, chain = _parse_mongosh(
+            "db.inventory.find({quantity: {$lt: 20}}, {name: 1, _id: 0})"
+        )
+        assert col == "inventory"
+        assert chain[0][1] == [{"quantity": {"$lt": 20}}, {"name": 1, "_id": 0}]
+
+    def test_updateMany_unquoted(self):
+        col, chain = _parse_mongosh(
+            'db.inventory.updateMany({quantity: {$lt: 20}}, {$set: {status: "low"}})'
+        )
+        assert col == "inventory"
+        assert chain[0][0] == "updateMany"
+        assert chain[0][1] == [
+            {"quantity": {"$lt": 20}},
+            {"$set": {"status": "low"}},
+        ]
+
+    def test_updateOne_unquoted(self):
+        col, chain = _parse_mongosh(
+            'db.users.updateOne({name: "Alice"}, {$set: {age: 31}})'
+        )
+        assert col == "users"
+        assert chain[0][0] == "updateOne"
+        assert chain[0][1] == [{"name": "Alice"}, {"$set": {"age": 31}}]
+
+    def test_find_unquoted_gte(self):
+        col, chain = _parse_mongosh("db.users.find({age: {$gte: 18}})")
+        assert col == "users"
+        assert chain[0][1] == [{"age": {"$gte": 18}}]
+
+    def test_aggregate_unquoted(self):
+        col, chain = _parse_mongosh(
+            'db.orders.aggregate([{$group: {_id: "$status", count: {$sum: 1}}}])'
+        )
+        assert col == "orders"
+        assert chain[0][0] == "aggregate"
+        pipeline = chain[0][1][0]
+        assert pipeline == [{"$group": {"_id": "$status", "count": {"$sum": 1}}}]
+
+    def test_deleteMany_unquoted(self):
+        col, chain = _parse_mongosh("db.logs.deleteMany({level: \"debug\"})")
+        assert col == "logs"
+        assert chain[0][0] == "deleteMany"
+        assert chain[0][1] == [{"level": "debug"}]
+
+    def test_insertOne_unquoted(self):
+        col, chain = _parse_mongosh(
+            'db.users.insertOne({name: "Bob", age: 25, active: true})'
+        )
+        assert col == "users"
+        assert chain[0][0] == "insertOne"
+        assert chain[0][1] == [{"name": "Bob", "age": 25, "active": True}]
