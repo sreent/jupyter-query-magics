@@ -32,6 +32,17 @@ _RE_DATE_NOW = re.compile(r"""new\s+Date\s*\(\s*\)""")
 _RE_OBJECTID = re.compile(
     r"""(?:new\s+)?ObjectId\s*\(\s*["']([0-9a-fA-F]{24})["']\s*\)"""
 )
+_RE_REGEXP = re.compile(
+    r"""(?:new\s+)?RegExp\s*\(\s*["']([^"']*)["']\s*(?:,\s*["']([^"']*)["'])?\s*\)"""
+)
+
+# Map JavaScript regex flags to Python re module flags.
+_JS_REGEX_FLAGS = {
+    "i": re.IGNORECASE,
+    "m": re.MULTILINE,
+    "s": re.DOTALL,
+    "x": re.VERBOSE,
+}
 
 
 def _preprocess_mongosh_extensions(text):
@@ -39,7 +50,8 @@ def _preprocess_mongosh_extensions(text):
 
     Handles:
         new Date("..."), ISODate("..."), new Date(), new Date(millis),
-        ObjectId("..."), new ObjectId("...").
+        ObjectId("..."), new ObjectId("..."),
+        RegExp("..."), RegExp("...", "flags"), new RegExp("...", "flags").
     """
     text = _RE_DATE_STRING.sub(
         lambda m: json.dumps(f"{_MONGOSH_SENTINEL}date:{m.group(1)}"), text
@@ -50,6 +62,12 @@ def _preprocess_mongosh_extensions(text):
     text = _RE_DATE_NOW.sub(json.dumps(f"{_MONGOSH_SENTINEL}date_now"), text)
     text = _RE_OBJECTID.sub(
         lambda m: json.dumps(f"{_MONGOSH_SENTINEL}oid:{m.group(1)}"), text
+    )
+    text = _RE_REGEXP.sub(
+        lambda m: json.dumps(
+            f"{_MONGOSH_SENTINEL}regex:{m.group(2) or ''}:{m.group(1)}"
+        ),
+        text,
     )
     return text
 
@@ -76,6 +94,15 @@ def _resolve_mongosh_types(obj):
                 return ObjectId(oid_hex)
             except ImportError:
                 return oid_hex
+        elif tag.startswith("regex:"):
+            rest = tag[6:]
+            colon_idx = rest.index(":")
+            flags_str = rest[:colon_idx]
+            pattern = rest[colon_idx + 1 :]
+            flags = 0
+            for f in flags_str:
+                flags |= _JS_REGEX_FLAGS.get(f, 0)
+            return re.compile(pattern, flags)
     elif isinstance(obj, dict):
         return {k: _resolve_mongosh_types(v) for k, v in obj.items()}
     elif isinstance(obj, list):
@@ -91,28 +118,87 @@ def _js_to_json(text):
     converts single-quoted strings to double-quoted strings so that
     expressions like ``{'name': 'Alice'}`` and ``{name: 'Alice'}`` are
     accepted.  JavaScript comments (``//`` and ``/* */``) are stripped.
+    Regex literals (``/pattern/flags``) are converted to placeholder
+    strings that ``_resolve_mongosh_types`` turns into compiled patterns.
     """
     out = []
     i = 0
     n = len(text)
+    # Track last non-whitespace character for regex-vs-comment disambiguation.
+    # A '/' in value position (after ':', '[', ',', '(') starts a regex literal;
+    # otherwise '//' is a line comment and '/*' is a block comment.
+    last_sig = ''
 
     while i < n:
         ch = text[i]
 
-        # --- single-line comment: skip to end of line ---
-        if ch == '/' and i + 1 < n and text[i + 1] == '/':
-            i += 2
-            while i < n and text[i] != '\n':
-                i += 1
-            continue
+        # --- slash: comment or regex literal ---
+        if ch == '/':
+            # regex literal when '/' appears in value position
+            if last_sig in (':', '[', ',', '(') and (
+                i + 1 >= n or text[i + 1] != '/'
+            ):
+                # block comment still wins over regex
+                if i + 1 < n and text[i + 1] == '*':
+                    i += 2
+                    while i < n and not (
+                        text[i] == '*' and i + 1 < n and text[i + 1] == '/'
+                    ):
+                        i += 1
+                    if i < n:
+                        i += 2
+                    continue
 
-        # --- block comment: skip to closing */ ---
-        if ch == '/' and i + 1 < n and text[i + 1] == '*':
-            i += 2
-            while i < n and not (text[i] == '*' and i + 1 < n and text[i + 1] == '/'):
-                i += 1
-            if i < n:
-                i += 2  # skip */
+                # parse /pattern/flags
+                i += 1  # skip opening /
+                pattern_chars = []
+                while i < n and text[i] != '/':
+                    if text[i] == '\\' and i + 1 < n:
+                        if text[i + 1] == '/':
+                            pattern_chars.append('/')
+                            i += 2
+                        else:
+                            pattern_chars.append(text[i])
+                            pattern_chars.append(text[i + 1])
+                            i += 2
+                    else:
+                        pattern_chars.append(text[i])
+                        i += 1
+                if i < n:
+                    i += 1  # skip closing /
+                flags_chars = []
+                while i < n and text[i].isalpha():
+                    flags_chars.append(text[i])
+                    i += 1
+                pattern = ''.join(pattern_chars)
+                flags = ''.join(flags_chars)
+                placeholder = f'{_MONGOSH_SENTINEL}regex:{flags}:{pattern}'
+                out.append(json.dumps(placeholder))
+                last_sig = '"'
+                continue
+
+            # single-line comment
+            if i + 1 < n and text[i + 1] == '/':
+                i += 2
+                while i < n and text[i] != '\n':
+                    i += 1
+                continue
+
+            # block comment
+            if i + 1 < n and text[i + 1] == '*':
+                i += 2
+                while i < n and not (
+                    text[i] == '*' and i + 1 < n and text[i + 1] == '/'
+                ):
+                    i += 1
+                if i < n:
+                    i += 2
+                continue
+
+            # bare '/' (e.g. division) — pass through
+            out.append(ch)
+            last_sig = ch
+            i += 1
             continue
 
         # --- double-quoted string: pass through unchanged ---
@@ -132,6 +218,7 @@ def _js_to_json(text):
             if i < n:
                 out.append(text[i])  # closing "
                 i += 1
+            last_sig = '"'
             continue
 
         # --- single-quoted string: convert to double-quoted ---
@@ -153,6 +240,7 @@ def _js_to_json(text):
             if i < n:
                 out.append('"')  # closing ' → "
                 i += 1
+            last_sig = '"'
             continue
 
         # --- unquoted identifier: quote if it is an object key ---
@@ -172,12 +260,21 @@ def _js_to_json(text):
                 out.append('"')
                 out.append(ident)
                 out.append('"')
+                last_sig = '"'
             else:
                 # value position (true, false, null, etc.) — leave as-is
                 out.append(ident)
+                last_sig = ident[-1] if ident else last_sig
+            continue
+
+        # --- whitespace: pass through without updating last_sig ---
+        if ch in (' ', '\t', '\n', '\r'):
+            out.append(ch)
+            i += 1
             continue
 
         out.append(ch)
+        last_sig = ch
         i += 1
 
     return ''.join(out)

@@ -1,5 +1,6 @@
 """Tests for the mongosh syntax parser."""
 
+import re
 from datetime import datetime, timezone
 
 import pytest
@@ -393,6 +394,102 @@ class TestParseMongoshWithDates:
         assert chain[0][1][0]["ts"] == datetime(
             2023, 6, 1, 0, 0, 0, tzinfo=timezone.utc
         )
+
+
+# --- Regex support ---
+
+
+class TestParseArgRegex:
+    def test_regexp_constructor(self):
+        result = _parse_arg('RegExp("^hello")')
+        assert result.pattern == "^hello"
+        assert result.flags & re.IGNORECASE == 0
+
+    def test_regexp_constructor_with_flags(self):
+        result = _parse_arg('RegExp("^hello", "i")')
+        assert result.pattern == "^hello"
+        assert result.flags & re.IGNORECASE
+
+    def test_new_regexp_constructor(self):
+        result = _parse_arg('new RegExp("^hello", "im")')
+        assert result.pattern == "^hello"
+        assert result.flags & re.IGNORECASE
+        assert result.flags & re.MULTILINE
+
+    def test_regexp_single_quotes(self):
+        result = _parse_arg("RegExp('^hello', 'i')")
+        assert result.pattern == "^hello"
+        assert result.flags & re.IGNORECASE
+
+    def test_object_with_regexp(self):
+        result = _parse_arg('{"name": RegExp("^Al", "i")}')
+        assert result["name"].pattern == "^Al"
+        assert result["name"].flags & re.IGNORECASE
+
+    def test_regex_literal(self):
+        result = _parse_arg("{name: /^Al/i}")
+        assert result["name"].pattern == "^Al"
+        assert result["name"].flags & re.IGNORECASE
+
+    def test_regex_literal_no_flags(self):
+        result = _parse_arg("{name: /^Al/}")
+        assert result["name"].pattern == "^Al"
+        assert result["name"].flags & re.IGNORECASE == 0
+
+    def test_regex_literal_multiple_flags(self):
+        result = _parse_arg("{name: /^Al/im}")
+        assert result["name"].pattern == "^Al"
+        assert result["name"].flags & re.IGNORECASE
+        assert result["name"].flags & re.MULTILINE
+
+    def test_regex_with_escaped_slash(self):
+        result = _parse_arg(r"{path: /^\/api\/users/}")
+        assert result["path"].pattern == "^/api/users"
+
+    def test_regex_in_array(self):
+        result = _parse_arg('{"$in": [/^Al/i, /^Bo/]}')
+        assert len(result["$in"]) == 2
+        assert result["$in"][0].pattern == "^Al"
+        assert result["$in"][1].pattern == "^Bo"
+
+
+class TestParseMongoshWithRegex:
+    def test_find_with_regex_literal(self):
+        col, chain = _parse_mongosh("db.users.find({name: /^Al/i})")
+        assert col == "users"
+        assert chain[0][1][0]["name"].pattern == "^Al"
+        assert chain[0][1][0]["name"].flags & re.IGNORECASE
+
+    def test_find_with_regexp_constructor(self):
+        col, chain = _parse_mongosh(
+            'db.users.find({"name": RegExp("^Al", "i")})'
+        )
+        assert col == "users"
+        assert chain[0][1][0]["name"].pattern == "^Al"
+
+    def test_find_regex_in_dollar_in(self):
+        col, chain = _parse_mongosh(
+            'db.users.find({name: {"$in": [/^Al/i, /^Bo/]}})'
+        )
+        assert col == "users"
+        patterns = chain[0][1][0]["name"]["$in"]
+        assert patterns[0].pattern == "^Al"
+        assert patterns[1].pattern == "^Bo"
+
+    def test_regex_with_comment_on_same_line(self):
+        col, chain = _parse_mongosh(
+            "db.users.find({name: /^Al/i}) // find users"
+        )
+        assert col == "users"
+        assert chain[0][1][0]["name"].pattern == "^Al"
+
+    def test_regex_does_not_break_comments(self):
+        query = """db.users.find(
+            {name: /^Al/i}  // regex filter
+        )"""
+        col, chain = _parse_mongosh(query)
+        assert col == "users"
+        assert chain[0][1][0]["name"].pattern == "^Al"
 
 
 # --- _js_to_json ---
