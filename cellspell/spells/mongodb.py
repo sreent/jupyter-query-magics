@@ -491,6 +491,14 @@ def _split_statements(text):
                 depth -= 1
                 if depth == 0 and found_paren and ch == ")":
                     i += 1
+                    # Check if a method chain follows (e.g. .count(), .sort())
+                    j = i
+                    while j < n and text[j] in " \t\n\r":
+                        j += 1
+                    if j < n and text[j] == ".":
+                        # Continue consuming — this is a chained method call
+                        i = j
+                        continue
                     break
             i += 1
 
