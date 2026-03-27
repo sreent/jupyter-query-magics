@@ -310,6 +310,41 @@ db.col.insertMany([{"d": new Date("2012-05-19")}])'''
         result = _split_statements(query)
         assert len(result) == 2
 
+    def test_find_with_count_chain(self):
+        query = 'db.users.find({"role": "passenger"}).count()'
+        result = _split_statements(query)
+        assert len(result) == 1
+        assert result[0] == query
+
+    def test_find_with_count_chain_multiline(self):
+        query = 'db.users.find({"role": "passenger"})\n  .count()'
+        result = _split_statements(query)
+        assert len(result) == 1
+
+    def test_find_with_explain_chain(self):
+        query = 'db.users.find({"role": "driver"}).explain("executionStats")'
+        result = _split_statements(query)
+        assert len(result) == 1
+        assert result[0] == query
+
+    def test_find_with_sort_limit_chain(self):
+        query = 'db.users.find({}).sort({"age": -1}).limit(10)'
+        result = _split_statements(query)
+        assert len(result) == 1
+        assert result[0] == query
+
+    def test_chained_then_new_statement(self):
+        query = 'db.users.find({}).count()\ndb.orders.find({})'
+        result = _split_statements(query)
+        assert len(result) == 2
+        assert result[0] == 'db.users.find({}).count()'
+        assert result[1] == 'db.orders.find({})'
+
+    def test_chained_then_new_statement_semicolon(self):
+        query = 'db.users.find({}).count(); db.orders.find({})'
+        result = _split_statements(query)
+        assert len(result) == 2
+
 
 # --- Mongosh JS constructor support (new Date, ObjectId, etc.) ---
 
