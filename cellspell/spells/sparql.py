@@ -129,7 +129,7 @@ class SPARQLMagics(Magics):
     """Jupyter magics for running SPARQL queries."""
 
     _graph = None
-    _loaded_files = []
+    _loaded_files = {}  # filepath -> mtime
 
     def _show_info(self):
         """Show loaded graph info."""
@@ -138,12 +138,12 @@ class SPARQLMagics(Magics):
             print("Use: %%sparql --file data.ttl")
             return
         print(f"Graph: {len(self._graph)} triples")
-        print(f"Files: {', '.join(self._loaded_files)}")
+        print(f"Files: {', '.join(self._loaded_files.keys())}")
 
     def _reset(self):
         """Clear the loaded graph and file cache."""
         self._graph = None
-        self._loaded_files = []
+        self._loaded_files = {}
         print("Graph cleared.")
 
     @line_cell_magic
@@ -246,15 +246,27 @@ class SPARQLMagics(Magics):
         if self._graph is None:
             self._graph = rdflib.Graph()
 
-        # Skip if already loaded
+        # Detect file modifications — reload the entire graph when a file changes
+        current_mtime = Path(filepath).stat().st_mtime
         if filepath in self._loaded_files:
-            return
+            if self._loaded_files[filepath] == current_mtime:
+                return  # unchanged
+            # File was modified — rebuild graph from all tracked files
+            print(f"⟳ {filepath} changed on disk — reloading graph")
+            old_files = dict(self._loaded_files)
+            self._graph = rdflib.Graph()
+            self._loaded_files = {}
+            for f, _ in old_files.items():
+                if f != filepath:
+                    fmt = _guess_rdf_format(f)
+                    self._graph.parse(f, format=fmt)
+                    self._loaded_files[f] = Path(f).stat().st_mtime
 
         try:
             before = len(self._graph)
             self._graph.parse(filepath, format=rdf_format)
             added = len(self._graph) - before
-            self._loaded_files.append(filepath)
+            self._loaded_files[filepath] = current_mtime
             print(f"✓ Loaded: {filepath} (+{added} triples, {len(self._graph)} total)")
         except Exception as e:
             print(f"Error loading {filepath}: {e}")
