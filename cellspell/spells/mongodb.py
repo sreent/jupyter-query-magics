@@ -806,10 +806,14 @@ class MongoDBMagics(Magics):
             opts = args[1] if len(args) > 1 and isinstance(args[1], dict) else {}
             self._db.create_collection(name, **opts)
             print(f"Created collection: {name}")
+        elif method == "dropDatabase":
+            name = self._db.name
+            self._client.drop_database(self._db)
+            print(f"Dropped database: {name}")
         else:
             print(
                 f"Unsupported db-level method: {method}\n"
-                "Supported: db.createCollection(\"name\")"
+                "Supported: db.createCollection(\"name\"), db.dropDatabase()"
             )
 
     def _execute(self, collection, col_name, method, args, chain):
