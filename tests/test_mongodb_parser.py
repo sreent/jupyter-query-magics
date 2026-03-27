@@ -653,3 +653,32 @@ class TestUnquotedMongoshSyntax:
             {"likes": "fashun"},
             {"$set": {"likes.$": "fashion"}},
         ]
+
+
+class TestCountParsing:
+    """Tests for .count() parsing support."""
+
+    def test_count_standalone(self):
+        col, chain = _parse_mongosh('db.users.count()')
+        assert col == "users"
+        assert chain[0][0] == "count"
+        assert chain[0][1] == []
+
+    def test_count_with_filter(self):
+        col, chain = _parse_mongosh('db.users.count({"age": {"$gt": 25}})')
+        assert col == "users"
+        assert chain[0][0] == "count"
+        assert chain[0][1] == [{"age": {"$gt": 25}}]
+
+    def test_find_count_chain(self):
+        col, chain = _parse_mongosh('db.users.find({"active": true}).count()')
+        assert col == "users"
+        assert chain[0][0] == "find"
+        assert chain[0][1] == [{"active": True}]
+        assert chain[1][0] == "count"
+
+    def test_find_count_chain_no_filter(self):
+        col, chain = _parse_mongosh('db.orders.find().count()')
+        assert col == "orders"
+        assert chain[0][0] == "find"
+        assert chain[1][0] == "count"
