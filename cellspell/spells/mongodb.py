@@ -812,6 +812,13 @@ class MongoDBMagics(Magics):
             filter_doc = args[0] if len(args) > 0 else {}
             projection = args[1] if len(args) > 1 else None
 
+            # Check if count() is in the chain — convert to countDocuments
+            if any(m == "count" for m, _ in chain):
+                count = collection.count_documents(filter_doc)
+                self.shell.user_ns["_mongodb"] = count
+                print(count)
+                return
+
             # Check if explain() is in the chain
             if any(m == "explain" for m, _ in chain):
                 explain_chain = [(m, a) for m, a in chain if m != "explain"]
@@ -882,6 +889,12 @@ class MongoDBMagics(Magics):
 
         elif method == "estimatedDocumentCount":
             count = collection.estimated_document_count()
+            self.shell.user_ns["_mongodb"] = count
+            print(count)
+
+        elif method == "count":
+            filter_doc = args[0] if len(args) > 0 else {}
+            count = collection.count_documents(filter_doc)
             self.shell.user_ns["_mongodb"] = count
             print(count)
 
@@ -979,7 +992,7 @@ class MongoDBMagics(Magics):
         else:
             print(
                 f"Unsupported method: {method}\n"
-                "Supported: find, findOne, aggregate, countDocuments, distinct,\n"
+                "Supported: find, findOne, aggregate, count, countDocuments, distinct,\n"
                 "           insertOne, insertMany, updateOne, updateMany,\n"
                 "           replaceOne, deleteOne, deleteMany, drop, createIndex"
             )
