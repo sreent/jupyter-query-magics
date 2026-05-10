@@ -598,6 +598,121 @@ class TestJsToJson:
 
         assert json.loads(result) == {"msg": "hello // world"}
 
+    def test_trailing_comma_in_array(self):
+        import json
+
+        assert json.loads(_js_to_json("[1, 2, 3,]")) == [1, 2, 3]
+
+    def test_trailing_comma_in_object(self):
+        import json
+
+        assert json.loads(_js_to_json('{"a": 1, "b": 2,}')) == {"a": 1, "b": 2}
+
+    def test_trailing_comma_with_newline_before_bracket(self):
+        import json
+
+        text = '[\n  "a",\n  "b",\n]'
+        assert json.loads(_js_to_json(text)) == ["a", "b"]
+
+    def test_trailing_comma_with_comment_before_bracket(self):
+        import json
+
+        text = '[\n  "a",\n  "b", // last\n]'
+        assert json.loads(_js_to_json(text)) == ["a", "b"]
+
+    def test_trailing_comma_inside_string_preserved(self):
+        import json
+
+        assert json.loads(_js_to_json('"a, b,"')) == "a, b,"
+
+    def test_non_trailing_comma_kept(self):
+        import json
+
+        assert json.loads(_js_to_json("[1, 2, 3]")) == [1, 2, 3]
+
+
+class TestParseArgTrailingCommas:
+    def test_array_trailing_comma(self):
+        assert _parse_arg("[1, 2, 3,]") == [1, 2, 3]
+
+    def test_object_trailing_comma(self):
+        assert _parse_arg('{"a": 1, "b": 2,}') == {"a": 1, "b": 2}
+
+    def test_nested_arrays_trailing_commas(self):
+        result = _parse_arg(
+            '{"genre": ["Action", "Sci-Fi",], "actors": ["A", "B",]}'
+        )
+        assert result == {"genre": ["Action", "Sci-Fi"], "actors": ["A", "B"]}
+
+    def test_star_trek_film_doc(self):
+        # The exact shape the user pasted: trailing commas in nested arrays
+        # plus ISODate(...) constructors plus mixed booleans.
+        text = '''{
+            "title": "Star Trek Into Darkness",
+            "year": 2013,
+            "genre": [
+                "Action",
+                "Adventure",
+                "Sci-Fi",
+            ],
+            "actors": [
+                "Pine, Chris",
+                "Quinto, Zachary",
+                "Saldana, Zoe",
+            ],
+            "releases": [
+                {
+                    "country": "USA",
+                    "date": ISODate("2013-05-17"),
+                    "prerelease": true
+                },
+                {
+                    "country": "Germany",
+                    "date": ISODate("2013-05-16"),
+                    "prerelease": false
+                }
+            ]
+        }'''
+        doc = _parse_arg(text)
+        assert doc["title"] == "Star Trek Into Darkness"
+        assert doc["year"] == 2013
+        assert doc["genre"] == ["Action", "Adventure", "Sci-Fi"]
+        assert doc["actors"] == ["Pine, Chris", "Quinto, Zachary", "Saldana, Zoe"]
+        assert len(doc["releases"]) == 2
+        assert doc["releases"][0]["country"] == "USA"
+        assert doc["releases"][0]["date"] == datetime(2013, 5, 17)
+        assert doc["releases"][0]["prerelease"] is True
+        assert doc["releases"][1]["prerelease"] is False
+
+
+class TestInsertAlias:
+    """db.coll.insert(...) is the legacy mongosh alias for insertOne/insertMany."""
+
+    def test_insert_single_doc_parses(self):
+        col, chain = _parse_mongosh('db.films.insert({"title": "Andor"})')
+        assert col == "films"
+        assert chain[0][0] == "insert"
+        assert chain[0][1] == [{"title": "Andor"}]
+
+    def test_insert_array_parses(self):
+        col, chain = _parse_mongosh(
+            'db.films.insert([{"title": "A"}, {"title": "B"}])'
+        )
+        assert col == "films"
+        assert chain[0][0] == "insert"
+        assert chain[0][1] == [[{"title": "A"}, {"title": "B"}]]
+
+    def test_insert_with_trailing_commas_and_isodate(self):
+        col, chain = _parse_mongosh(
+            'db.films.insert({"title": "X", "tags": ["a", "b",], '
+            '"date": ISODate("2013-05-17"),})'
+        )
+        assert col == "films"
+        assert chain[0][0] == "insert"
+        doc = chain[0][1][0]
+        assert doc["tags"] == ["a", "b"]
+        assert doc["date"] == datetime(2013, 5, 17)
+
 
 # --- Unquoted mongosh syntax (end-to-end) ---
 

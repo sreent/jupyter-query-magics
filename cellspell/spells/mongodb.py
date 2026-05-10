@@ -110,6 +110,32 @@ def _resolve_mongosh_types(obj):
     return obj
 
 
+def _next_significant_index(text, i, n):
+    """Return the index of the next non-whitespace, non-comment character at or after i."""
+    while i < n:
+        ch = text[i]
+        if ch in (' ', '\t', '\n', '\r'):
+            i += 1
+            continue
+        if ch == '/' and i + 1 < n:
+            if text[i + 1] == '/':
+                i += 2
+                while i < n and text[i] != '\n':
+                    i += 1
+                continue
+            if text[i + 1] == '*':
+                i += 2
+                while i < n and not (
+                    text[i] == '*' and i + 1 < n and text[i + 1] == '/'
+                ):
+                    i += 1
+                if i < n:
+                    i += 2
+                continue
+        return i
+    return n
+
+
 def _js_to_json(text):
     """Convert relaxed mongosh object notation to strict JSON.
 
@@ -118,8 +144,10 @@ def _js_to_json(text):
     converts single-quoted strings to double-quoted strings so that
     expressions like ``{'name': 'Alice'}`` and ``{name: 'Alice'}`` are
     accepted.  JavaScript comments (``//`` and ``/* */``) are stripped.
-    Regex literals (``/pattern/flags``) are converted to placeholder
-    strings that ``_resolve_mongosh_types`` turns into compiled patterns.
+    Trailing commas before ``}`` or ``]`` are dropped (legal in JS,
+    not in JSON).  Regex literals (``/pattern/flags``) are converted to
+    placeholder strings that ``_resolve_mongosh_types`` turns into
+    compiled patterns.
     """
     out = []
     i = 0
@@ -131,6 +159,17 @@ def _js_to_json(text):
 
     while i < n:
         ch = text[i]
+
+        # --- comma: drop if it's a trailing comma before } or ] ---
+        if ch == ',':
+            j = _next_significant_index(text, i + 1, n)
+            if j < n and text[j] in ('}', ']'):
+                i += 1
+                continue
+            out.append(ch)
+            last_sig = ch
+            i += 1
+            continue
 
         # --- slash: comment or regex literal ---
         if ch == '/':
@@ -930,6 +969,25 @@ class MongoDBMagics(Magics):
             result = collection.insert_one(args[0])
             print(f"Inserted: {result.inserted_id}")
 
+        elif method == "insert":
+            # Legacy mongosh: db.coll.insert(doc) inserts one;
+            # db.coll.insert([d1, d2]) inserts many.
+            if len(args) < 1:
+                print("Error: insert() requires a document or array of documents.")
+                return
+            payload = args[0]
+            if isinstance(payload, list):
+                if not payload:
+                    print("Inserted 0 document(s)")
+                    return
+                result = collection.insert_many(payload)
+                print(f"Inserted {len(result.inserted_ids)} document(s)")
+            elif isinstance(payload, dict):
+                result = collection.insert_one(payload)
+                print(f"Inserted: {result.inserted_id}")
+            else:
+                print("Error: insert() requires a document or array of documents.")
+
         elif method == "insertMany":
             if len(args) < 1:
                 print("Error: insertMany() requires an array of documents.")
@@ -1005,7 +1063,7 @@ class MongoDBMagics(Magics):
             print(
                 f"Unsupported method: {method}\n"
                 "Supported: find, findOne, aggregate, count, countDocuments, distinct,\n"
-                "           insertOne, insertMany, updateOne, updateMany,\n"
+                "           insert, insertOne, insertMany, updateOne, updateMany,\n"
                 "           replaceOne, deleteOne, deleteMany, drop, createIndex"
             )
 
