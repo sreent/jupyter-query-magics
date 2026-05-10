@@ -832,3 +832,34 @@ class TestCountParsing:
         assert col == "orders"
         assert chain[0][0] == "find"
         assert chain[1][0] == "count"
+
+
+class TestPrettyChain:
+    def test_find_pretty_parses(self):
+        col, chain = _parse_mongosh('db.films.find().pretty()')
+        assert col == "films"
+        assert chain[0][0] == "find"
+        assert chain[1][0] == "pretty"
+        assert chain[1][1] == []
+
+    def test_find_filter_then_pretty(self):
+        col, chain = _parse_mongosh('db.films.find({"year": 2013}).pretty()')
+        assert col == "films"
+        assert chain[0][1] == [{"year": 2013}]
+        assert chain[1][0] == "pretty"
+
+    def test_apply_cursor_chain_pretty_is_noop(self):
+        from cellspell.spells.mongodb import MongoDBMagics
+
+        magics = MongoDBMagics.__new__(MongoDBMagics)
+
+        class FakeCursor:
+            sorted = False
+            def sort(self, _):
+                self.sorted = True
+                return self
+
+        cursor = FakeCursor()
+        # Should not print or raise — pretty is silently consumed.
+        result = magics._apply_cursor_chain(cursor, [("pretty", [])])
+        assert result is cursor
