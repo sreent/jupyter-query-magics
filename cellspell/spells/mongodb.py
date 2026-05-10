@@ -1083,6 +1083,9 @@ class MongoDBMagics(Magics):
             elif method_name == "skip":
                 if len(args) > 0:
                     cursor = cursor.skip(int(args[0]))
+            elif method_name == "pretty":
+                # Output is always pretty-printed by _print_documents.
+                pass
             else:
                 print(f"Warning: Unsupported cursor method: .{method_name}()")
         return cursor
