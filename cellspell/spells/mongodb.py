@@ -1103,6 +1103,10 @@ class MongoDBMagics(Magics):
             elif method_name == "pretty":
                 # Output is always pretty-printed by _print_documents.
                 pass
+            elif method_name == "toArray":
+                # Cursor is always fully materialised by list(cursor) before
+                # printing, so .toArray() is a no-op here.
+                pass
             else:
                 print(f"Warning: Unsupported cursor method: .{method_name}()")
         return cursor
