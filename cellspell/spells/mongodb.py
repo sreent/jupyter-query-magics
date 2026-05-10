@@ -110,6 +110,11 @@ def _resolve_mongosh_types(obj):
     return obj
 
 
+# Backslash followed by one of these starts a valid JSON escape; anything
+# else is a stray backslash that mongosh tolerates but strict JSON rejects.
+_VALID_JSON_ESCAPE_CHARS = frozenset('"\\/bfnrtu')
+
+
 def _next_significant_index(text, i, n):
     """Return the index of the next non-whitespace, non-comment character at or after i."""
     while i < n:
@@ -240,16 +245,23 @@ def _js_to_json(text):
             i += 1
             continue
 
-        # --- double-quoted string: pass through unchanged ---
+        # --- double-quoted string: pass through, escaping stray backslashes ---
         if ch == '"':
             out.append(ch)
             i += 1
             while i < n and text[i] != '"':
                 if text[i] == '\\':
-                    out.append(text[i])
-                    i += 1
-                    if i < n:
+                    nxt = text[i + 1] if i + 1 < n else ''
+                    if nxt in _VALID_JSON_ESCAPE_CHARS:
                         out.append(text[i])
+                        i += 1
+                        if i < n:
+                            out.append(text[i])
+                            i += 1
+                    else:
+                        # Stray backslash (e.g. \+ in a regex) — escape it so
+                        # json.loads accepts it as a literal backslash.
+                        out.append('\\\\')
                         i += 1
                 else:
                     out.append(text[i])
@@ -266,10 +278,15 @@ def _js_to_json(text):
             i += 1
             while i < n and text[i] != "'":
                 if text[i] == '\\':
-                    out.append(text[i])
-                    i += 1
-                    if i < n:
+                    nxt = text[i + 1] if i + 1 < n else ''
+                    if nxt in _VALID_JSON_ESCAPE_CHARS:
                         out.append(text[i])
+                        i += 1
+                        if i < n:
+                            out.append(text[i])
+                            i += 1
+                    else:
+                        out.append('\\\\')
                         i += 1
                 else:
                     if text[i] == '"':
