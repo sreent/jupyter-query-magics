@@ -834,6 +834,48 @@ class TestCountParsing:
         assert chain[1][0] == "count"
 
 
+class TestStrayBackslashEscapes:
+    """mongosh tolerates stray backslashes (e.g. \\+ in regex strings) that
+    strict JSON rejects. _js_to_json should double them so json.loads accepts.
+    """
+
+    def test_js_to_json_stray_plus(self):
+        import json
+
+        assert json.loads(_js_to_json(r'{"r": "^\+659"}')) == {"r": r"^\+659"}
+
+    def test_js_to_json_valid_escapes_preserved(self):
+        import json
+
+        result = json.loads(_js_to_json(r'{"a": "line\nbreak", "b": "C:\\Users"}'))
+        assert result == {"a": "line\nbreak", "b": r"C:\Users"}
+
+    def test_js_to_json_single_quoted_stray(self):
+        import json
+
+        assert json.loads(_js_to_json(r"{'r': '^\+659'}")) == {"r": r"^\+659"}
+
+    def test_parse_arg_explicit_regex_with_plus(self):
+        # Slide 36 form: { "$regex": "^\+659" }
+        result = _parse_arg(r'{ "phone": { "$regex": "^\+659" } }')
+        assert result == {"phone": {"$regex": r"^\+659"}}
+
+    def test_parse_mongosh_find_with_explicit_regex(self):
+        col, chain = _parse_mongosh(
+            r'db.users.find({ "phone": { "$regex": "^\+659" } })'
+        )
+        assert col == "users"
+        assert chain[0][0] == "find"
+        assert chain[0][1][0] == {"phone": {"$regex": r"^\+659"}}
+
+    def test_js_to_json_double_backslash_unchanged(self):
+        # \\ is a valid JSON escape — must remain a single literal backslash
+        # after json.loads, not a double-doubled one.
+        import json
+
+        assert json.loads(_js_to_json(r'{"p": "C:\\path"}')) == {"p": r"C:\path"}
+
+
 class TestPrettyChain:
     def test_find_pretty_parses(self):
         col, chain = _parse_mongosh('db.films.find().pretty()')
